@@ -1,0 +1,132 @@
+/* Drusoft Shipping for Econt Checkout Styles */
+
+/* Reduce font size ONLY for Econt Office/Automat dropdowns */
+#econt-office-field .select2-container .select2-selection--single {
+    height: 32px; /* Standard WC height is usually around 40px, reducing slightly */
+    display: flex;
+    align-items: center;
+}
+
+#econt-office-field .select2-container--default .select2-selection--single .select2-selection__rendered {
+    font-size: 13px; /* Smaller font for long addresses */
+    line-height: 1.2; /* Allow multi-line if needed, or tight single line */
+    padding-left: 8px;
+    padding-right: 20px; /* Space for arrow */
+    color: #444;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+/* Center the arrow vertically */
+#econt-office-field .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 30px;
+    top: 1px;
+}
+
+/* Adjust dropdown results font size for Offices/Automats */
+.select2-results__option {
+    font-size: 13px;
+    padding: 6px 10px;
+}
+
+/* Service Selector (radio buttons) */
+#econt-service-field {
+    max-width: 100%;
+}
+
+#econt-service-field .econt-service-option {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: normal;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+#econt-service-field .econt-service-option input[type="radio"] {
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* Ensure radio buttons are aligned nicely */
+#econt-delivery-type-wrapper label {
+    font-weight: normal;
+    margin-right: 15px;
+    cursor: pointer;
+}
+
+#econt-delivery-type-wrapper input[type="radio"] {
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* Econt Map Modal */
+.econt-modal {
+    display: none;
+    position: fixed;
+    z-index: 99999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.econt-modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 1000px;
+    height: 80%;
+    position: relative;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    border-radius: 5px;
+}
+
+.econt-modal-header {
+    padding: 10px 15px;
+    background: #f1f1f1;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 5px 5px 0 0;
+}
+
+.econt-modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.econt-close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 20px;
+}
+
+.econt-close:hover,
+.econt-close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.econt-modal-body {
+    height: calc(100% - 41px); /* Header height approx */
+    width: 100%;
+}
+
+.econt-modal-body iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0 0 5px 5px;
+}

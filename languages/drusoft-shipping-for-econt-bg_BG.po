@@ -1,0 +1,513 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Drusoft Shipping for Econt 1.0.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-10-27 12:00+0000\n"
+"PO-Revision-Date: 2023-10-27 12:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Bulgarian\n"
+"Language: bg_BG\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.0\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "To Address"
+msgstr "До адрес"
+
+msgid "To Office"
+msgstr "До офис"
+
+msgid "To Automat"
+msgstr "До автомат"
+
+msgid "Select Office"
+msgstr "Изберете офис"
+
+msgid "Select Automat"
+msgstr "Изберете автомат"
+
+msgid "Select from Map"
+msgstr "Изберете от карта"
+
+msgid "Select a city..."
+msgstr "Изберете град..."
+
+msgid "Please select a city first."
+msgstr "Моля, първо изберете град."
+
+msgid "No results"
+msgstr "Няма резултати"
+
+msgid "Select Service"
+msgstr "Изберете услуга"
+
+msgid "Please correct your credentials and save again."
+msgstr "Моля, коригирайте данните си и запишете отново."
+
+msgid "Please select a Econt office."
+msgstr "Моля, изберете офис на Иконт."
+
+msgid "Please select a Econt automat."
+msgstr "Моля, изберете автомат на Иконт."
+
+msgid "Econt Orders"
+msgstr "Иконт поръчки"
+
+msgid "Are you sure you want to cancel this shipment?"
+msgstr "Сигурни ли сте, че искате да анулирате тази пратка?"
+
+msgid "Requesting..."
+msgstr "Заявяване..."
+
+msgid "Requested"
+msgstr "Заявено"
+
+msgid "Request Courier"
+msgstr "Заяви куриер"
+
+msgid "Generating..."
+msgstr "Генериране..."
+
+msgid "Generate"
+msgstr "Генерирай"
+
+msgid "Permission denied."
+msgstr "Достъпът е отказан."
+
+msgid "Invalid order ID."
+msgstr "Невалиден ID на поръчка."
+
+msgid "Waybill generated successfully."
+msgstr "Товарителницата е генерирана успешно."
+
+msgid "No waybill found for this order."
+msgstr "Няма намерена товарителница за тази поръчка."
+
+msgid "API credentials not found."
+msgstr "Не са намерени API данни."
+
+msgid "Cancelled by admin"
+msgstr "Анулирано от администратор"
+
+msgid "Econt shipment %s cancelled."
+msgstr "Иконт пратка %s е анулирана."
+
+msgid "Shipment cancelled successfully."
+msgstr "Пратката е анулирана успешно."
+
+msgid "Courier requested successfully."
+msgstr "Куриерът е заявен успешно."
+
+msgid "Econt Print Error"
+msgstr "Грешка при печат на Иконт"
+
+msgid "Unknown error from Econt print API."
+msgstr "Неизвестна грешка от API за печат на Иконт."
+
+msgid "Econt Shipment"
+msgstr "Иконт пратка"
+
+msgid "Order not found."
+msgstr "Поръчката не е намерена."
+
+msgid "Waybill:"
+msgstr "Товарителница:"
+
+msgid "Print Waybill"
+msgstr "Печат на товарителница"
+
+msgid "Cancel Shipment"
+msgstr "Анулирай пратка"
+
+msgid "No waybill generated yet."
+msgstr "Все още няма генерирана товарителница."
+
+msgid "Generate Waybill"
+msgstr "Генерирай товарителница"
+
+msgid "Cancelling..."
+msgstr "Анулиране..."
+
+msgid "Courier Requested"
+msgstr "Куриерът е заявен"
+
+msgid "Drusoft Shipping for Econt"
+msgstr "Drusoft доставка за Иконт"
+
+msgid "Fresh, conflict-free Econt delivery for Bulgaria."
+msgstr "Чиста, безконфликтна интеграция на Иконт за България."
+
+msgid "Econt Delivery"
+msgstr "Доставка със Иконт"
+
+msgid "Econt API authentication failed: %s"
+msgstr "Неуспешна удостоверяване в API на Иконт: %s"
+
+msgid "Credentials have been cleared."
+msgstr "Данните за достъп са изчистени."
+
+msgid "Invalid username or password."
+msgstr "Невалидно потребителско име или парола."
+
+msgid "Unexpected API response (HTTP %d)."
+msgstr "Неочакван отговор от API (HTTP %d)."
+
+msgid "The API returned an unexpected response. Please check your credentials."
+msgstr "API върна неочакван отговор. Моля, проверете данните си."
+
+msgid "Econt API Connection"
+msgstr "Връзка с API на Иконт"
+
+msgid "Module Status"
+msgstr "Статус на модула"
+
+msgid "Enable/Disable"
+msgstr "Включване/Изключване"
+
+msgid "Method Title"
+msgstr "Заглавие на метода"
+
+msgid "Username"
+msgstr "Потребителско име"
+
+msgid "Password"
+msgstr "Парола"
+
+msgid "Please save your credentials to unlock shipping options."
+msgstr "Моля, запишете данните си, за да отключите опциите за доставка."
+
+msgid "Sender Information"
+msgstr "Информация за подателя"
+
+msgid "Sender (Object)"
+msgstr "Подател (Обект)"
+
+msgid "Contact Person"
+msgstr "Лице за контакт"
+
+msgid "Email"
+msgstr "Имейл"
+
+msgid "Phone Number"
+msgstr "Телефонен номер"
+
+msgid "City"
+msgstr "Град"
+
+msgid "Search for a city..."
+msgstr "Търсене на град..."
+
+msgid "Send from Office"
+msgstr "Изпращане от офис"
+
+msgid "No"
+msgstr "Не"
+
+msgid "Yes"
+msgstr "Да"
+
+msgid "Shipping from Office"
+msgstr "Изпращане от офис"
+
+msgid "Search for an office..."
+msgstr "Търсене на офис..."
+
+msgid "Working Day End Time"
+msgstr "Край на работния ден"
+
+msgid "Format HH:MM"
+msgstr "Формат ЧЧ:ММ"
+
+msgid "Shipment Settings"
+msgstr "Настройки на пратката"
+
+msgid "Active Services"
+msgstr "Активни услуги"
+
+msgid "Packaging"
+msgstr "Опаковка"
+
+msgid "Default Weight"
+msgstr "Тегло по подразбиране"
+
+msgid "Declared Value"
+msgstr "Обявена стойност"
+
+msgid "Fragile"
+msgstr "Чупливо"
+
+msgid "Saturday Delivery"
+msgstr "Съботна доставка"
+
+msgid "Special Requirements"
+msgstr "Специални изисквания"
+
+msgid "Pricing & Payment"
+msgstr "Ценообразуване и плащане"
+
+msgid "Pricing Method"
+msgstr "Метод на ценообразуване"
+
+msgid "Econt Calculator"
+msgstr "Калкулатор на Иконт"
+
+msgid "Fixed Price"
+msgstr "Фиксирана цена"
+
+msgid "Free Shipping"
+msgstr "Безплатна доставка"
+
+msgid "Custom Prices"
+msgstr "Потребителски цени"
+
+msgid "Calculator + Surcharge"
+msgstr "Калкулатор + Надбавка"
+
+msgid "Surcharge Amount"
+msgstr "Сума на надбавката"
+
+msgid "CSV Price File"
+msgstr "CSV файл с цени"
+
+msgid "Path to CSV file with custom prices"
+msgstr "Път до CSV файл с потребителски цени"
+
+msgid "Sum ABOVE the specified here activates free shipping to office/address. Explanation: If you want users to receive free shipping when reaching X amount - enter it with 0.01 less in the respective field. For example, for free shipping when reaching 100lv - enter 99.99 etc."
+msgstr "Сума НАД посочената тук активира безплатна доставка до офис/адрес. Обяснение: Ако искате потребителите да получават безплатна доставка при достигане на сума Х - въведете я с 0.01 по-малко в съответното поле. Например, за безплатна доставка при достигане на 100лв - въведете 99.99 и т.н."
+
+msgid "Free Shipping to Automat > Amount"
+msgstr "Безплатна доставка до автомат > Сума"
+
+msgid "Free Shipping to Office > Amount"
+msgstr "Безплатна доставка до офис > Сума"
+
+msgid "Free Shipping to Address > Amount"
+msgstr "Безплатна доставка до адрес > Сума"
+
+msgid "Fixed Shipping Price"
+msgstr "Фиксирана цена за доставка"
+
+msgid "Enable fixed shipping price to office/address"
+msgstr "Включи фиксирана цена за доставка до офис/адрес"
+
+msgid "Fixed Price to Automat"
+msgstr "Фиксирана цена до автомат"
+
+msgid "Fixed Price to Office"
+msgstr "Фиксирана цена до офис"
+
+msgid "Fixed Price to Address"
+msgstr "Фиксирана цена до адрес"
+
+msgid "Money Transfer Type"
+msgstr "Тип паричен превод"
+
+msgid "Cash on Delivery"
+msgstr "Наложен платеж"
+
+msgid "Postal Money Transfer"
+msgstr "Пощенски паричен превод"
+
+msgid "Fiscal Receipt (Items)"
+msgstr "Фискален бон (Артикули)"
+
+msgid "Fiscal Receipt (Groups)"
+msgstr "Фискален бон (Групи)"
+
+msgid "Include Shipping Price in COD"
+msgstr "Включи цената на доставката в НП"
+
+msgid "Administrative Fee"
+msgstr "Административна такса"
+
+msgid "Workflow & Options"
+msgstr "Работен процес и опции"
+
+msgid "Automatic Waybill"
+msgstr "Автоматична товарителница"
+
+msgid "Automatically create waybill on order completion"
+msgstr "Автоматично създаване на товарителница при завършване на поръчката"
+
+msgid "Label Printer"
+msgstr "Принтер за етикети"
+
+msgid "Additional Waybill Copy"
+msgstr "Допълнително копие на товарителницата"
+
+msgid "Options Before Payment"
+msgstr "Опции преди плащане"
+
+msgid "None"
+msgstr "Няма"
+
+msgid "Open"
+msgstr "Отвори"
+
+msgid "Test"
+msgstr "Тествай"
+
+msgid "Return Shipment Payer (Test/Open)"
+msgstr "Платец на връщане (Тест/Отвори)"
+
+msgid "Sender"
+msgstr "Подател"
+
+msgid "Recipient"
+msgstr "Получател"
+
+msgid "Auto Close Options at Automat"
+msgstr "Автоматично затваряне на опции при автомат"
+
+msgid "Returns & Vouchers"
+msgstr "Връщания и ваучери"
+
+msgid "Return Voucher"
+msgstr "Ваучер за връщане"
+
+msgid "Return Payer"
+msgstr "Платец на връщане"
+
+msgid "Voucher Validity (Days)"
+msgstr "Валидност на ваучера (Дни)"
+
+msgid "-- Select Client --"
+msgstr "-- Изберете клиент --"
+
+msgid "ID: %1$s, %2$s, %3$s, Address: %4$s"
+msgstr "ID: %1$s, %2$s, %3$s, Адрес: %4$s"
+
+msgid "-- Select Office --"
+msgstr "-- Изберете офис --"
+
+msgid "Service"
+msgstr "Услуга"
+
+msgid "-- None --"
+msgstr "-- Няма --"
+
+msgid "Econt Waybill Error: "
+msgstr "Грешка в товарителница на Иконт: "
+
+msgid "Econt Waybill Created: "
+msgstr "Създадена товарителница на Иконт: "
+
+msgid "Unexpected response from Econt API."
+msgstr "Неочакван отговор от API на Иконт."
+
+msgid "No Econt shipping data found for this order."
+msgstr "Няма намерени данни за доставка със Иконт за тази поръчка."
+
+msgid "Econt credentials are not configured for this shipping method."
+msgstr "Данните за Иконт не са конфигурирани за този метод на доставка."
+
+msgid "Econt Sync Failed: Missing credentials."
+msgstr "Синхронизацията на Иконт неуспешна: Липсват данни за достъп."
+
+msgid "Econt Cities Sync Error: "
+msgstr "Грешка при синхронизация на градове от Иконт: "
+
+msgid "Econt Cities Sync Completed. Count: "
+msgstr "Синхронизацията на градове от Иконт завърши. Брой: "
+
+msgid "Econt Offices Sync Error: "
+msgstr "Грешка при синхронизация на офиси от Иконт: "
+
+msgid "Econt Offices Sync Completed. Count: "
+msgstr "Синхронизацията на офиси от Иконт завърши. Брой: "
+
+msgid "No API credentials found."
+msgstr "Не са намерени API данни."
+
+msgid "Shipping method class not found."
+msgstr "Класът на метода за доставка не е намерен."
+
+msgid "No file uploaded."
+msgstr "Няма качен файл."
+
+msgid "Invalid file type. Please upload a CSV file."
+msgstr "Невалиден тип файл. Моля, качете CSV файл."
+
+msgid "Missing region code"
+msgstr "Липсва код на регион"
+
+msgid "Missing city ID"
+msgstr "Липсва ID на град"
+
+msgid "City not found"
+msgstr "Градът не е намерен"
+
+msgid "Region mapping not found for: "
+msgstr "Не е намерено съответствие на регион за: "
+
+msgid "Invalid service ID"
+msgstr "Невалиден ID на услуга"
+
+msgid "Service not available"
+msgstr "Услугата не е налична"
+
+msgid "No session"
+msgstr "Няма сесия"
+
+msgid "Free shipping"
+msgstr "Безплатна доставка"
+
+msgid "Products from order (group %s)"
+msgstr "Продукти от поръчка (група %s)"
+
+msgid "Delivery"
+msgstr "Доставка"
+
+msgid "Order #"
+msgstr "Поръчка #"
+
+msgid "API Error"
+msgstr "API грешка"
+
+msgid "No waybill found."
+msgstr "Товарителницата не е намерена."
+
+msgid "Automats (APT/APS) cannot be used as sender drop-off offices. Please select a regular Econt office."
+msgstr "Автоматите (APT/APS) не могат да бъдат използвани като офиси за предаване. Моля, изберете обикновен офис на Иконт."
+
+msgid "Envelope"
+msgstr "Плик"
+
+msgid "Box"
+msgstr "Кутия"
+
+msgid "Pallet"
+msgstr "Палет"
+
+msgid "Pallet is only available for pallet services and cannot be used with automat delivery. For automats the plugin will automatically fall back to Box."
+msgstr "Палет е наличен само за палетни услуги и не може да се използва при доставка до автомат. При автомати плъгинът автоматично ще използва Кутия."
+
+msgid "Econt Order"
+msgstr "Иконт поръчка"
+
+msgid "Order"
+msgstr "Поръчка"
+
+msgid "Waybill"
+msgstr "Товарителница"
+
+msgid "Customer"
+msgstr "Клиент"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Date"
+msgstr "Дата"
+
+msgid "Print"
+msgstr "Печат"
+
+msgid "Cancel"
+msgstr "Анулирай"
+
+msgid "Unknown API error"
+msgstr "Неизвестна API грешка"
+

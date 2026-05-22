@@ -1,0 +1,8 @@
+{
+	"landingPage": "/wp-admin/admin.php?page=wc-settings&tab=shipping",
+	"login": true,
+	"plugins": [
+		"woocommerce"
+	]
+}
+

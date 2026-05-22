@@ -1,0 +1,11 @@
+# Local dev artifacts
+*.log
+.DS_Store
+*.swp
+*.swo
+
+# Node (in case anyone runs an asset build here later)
+node_modules/
+
+# WordPress unit tests
+/tests/
