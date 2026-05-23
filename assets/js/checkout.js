@@ -74,6 +74,26 @@
          * Both branches always end with update_checkout, so the order review
          * always re-renders with whatever calculate_shipping returns from session.
          */
+        // Apply WC's standard blockUI overlay so the user gets immediate
+        // visual feedback that "something is happening" before any DOM churn
+        // or AJAX completes. We mirror WC's own update_checkout_action by
+        // blocking the two elements that get fragment-replaced at the end of
+        // the cycle: .woocommerce-checkout-review-order-table (the totals)
+        // and .woocommerce-checkout-payment (the payment selector). Because
+        // those elements are .replaceWith()-swapped, the .blockOverlay child
+        // dies with the old node — no stale overlay. Blocking #order_review
+        // directly does NOT clear, because WC's fragments are descendants of
+        // it, not the wrapper itself.
+        function blockOrderReview() {
+            const $targets = $('.woocommerce-checkout-review-order-table, .woocommerce-checkout-payment');
+            if ($targets.length && typeof $targets.block === 'function') {
+                $targets.block({
+                    message: null,
+                    overlayCSS: { background: '#fff', opacity: 0.6 },
+                });
+            }
+        }
+
         function recalculatePrice() {
             if (!isEcontActive) return;
 
@@ -103,6 +123,8 @@
             flowVersion += 1;
             const myVersion = flowVersion;
             priceInFlight = true;
+
+            blockOrderReview();
 
             const endpoint = incomplete ? 'drushfe_clear_price' : 'drushfe_calculate_price';
             const payload  = incomplete
@@ -134,6 +156,166 @@
                 $(document.body).trigger('update_checkout');
             });
         }
+
+        // ─── Office Map (nationwide) ──────────────────────────────────────
+        // Lazy-fetched cache of every Econt office/automat with lat/lng + the
+        // city's BG-XX region code. Populated on first openOfficeMap() click.
+        let allOfficesCache = null;
+        let allOfficesPromise = null;
+        function fetchAllOffices() {
+            if (allOfficesCache) return Promise.resolve(allOfficesCache);
+            if (allOfficesPromise) return allOfficesPromise;
+            allOfficesPromise = $.ajax({
+                url: params.ajax_url,
+                method: 'POST',
+                data: { action: 'drushfe_get_all_offices', nonce: params.nonce },
+            }).then(function (response) {
+                if (response && response.success && Array.isArray(response.data)) {
+                    allOfficesCache = response.data;
+                }
+                allOfficesPromise = null;
+                return allOfficesCache || [];
+            }, function () {
+                allOfficesPromise = null;
+                return [];
+            });
+            return allOfficesPromise;
+        }
+
+        // Place / move the "Open Map" button. Idempotent — call from every
+        // setup path so the button follows the layout as Econt fields appear.
+        // The button is shown whenever Econt is the active shipping method,
+        // even before any city/delivery-type is chosen.
+        function placeMapButton() {
+            $('#econt-map-button-wrapper').remove();
+            if (!isEcontActive) return;
+
+            const html =
+                '<p class="form-row form-row-wide" id="econt-map-button-wrapper" style="margin-top: 10px;">' +
+                '<button type="button" id="econt-open-map" class="button" style="width: 100%;">' +
+                params.i18n.select_from_map + '</button></p>';
+
+            // Anchor as low in the Econt stack as possible so it doesn't
+            // intercept the address/office fields visually.
+            const $anchor = $('#econt-office-field').length
+                ? $('#econt-office-field')
+                : ($('#econt-delivery-type-field').length
+                    ? $('#econt-delivery-type-field')
+                    : $('#' + currentContext + '_city_field'));
+            $anchor.after(html);
+
+            $('#econt-open-map').off('click.econtMap').on('click.econtMap', openOfficeMap);
+        }
+
+        // Open the map with the appropriate point set, given the current
+        // delivery-type selection. Falls back to "all offices nationwide"
+        // when no delivery type is chosen yet.
+        function openOfficeMap() {
+            if (!window.DrushfeMap) return;
+            const currentType = $('input[name="econt_delivery_type"]:checked').val() || lastDeliveryType || 'address';
+
+            // Default the filter radio inside the modal to whichever delivery
+            // type the customer is currently on (or 'both' in address mode).
+            let defaultFilter = 'both';
+            let title = params.i18n.map_title || params.i18n.map_title_office;
+            if (currentType === 'automat') { defaultFilter = 'automat'; title = params.i18n.map_title_automat; }
+            else if (currentType === 'office')  { defaultFilter = 'office';  title = params.i18n.map_title_office;  }
+
+            fetchAllOffices().then(function (all) {
+                // Always pass the full list — filtering is done inside the
+                // modal so the user can change their mind without reopening.
+                window.DrushfeMap.open(all, handleMapPick, {
+                    title:         title,
+                    hint:          params.i18n.map_hint,
+                    pickLabel:     params.i18n.map_pick,
+                    errorLabel:    params.i18n.map_error,
+                    defaultFilter: defaultFilter,
+                    i18n: {
+                        offices:            params.i18n.map_filter_office,
+                        automats:           params.i18n.map_filter_automat,
+                        both:               params.i18n.map_filter_both,
+                        search_placeholder: params.i18n.map_search_placeholder,
+                        results_count:      params.i18n.map_results_count,
+                        search_no_results:  params.i18n.map_search_no_results,
+                    },
+                });
+            });
+        }
+
+        // Picking a marker may require switching state + city + delivery-type.
+        // Chain those changes with short polls for the dependent UI to render
+        // (mirrors the Speedy plugin's updateOfficeFromMap pattern).
+        function handleMapPick(point) {
+            const targetCityId = String(point.city_id);
+            const targetRegion = point.region_code;
+            const targetType   = (point.office_type === 'APS') ? 'automat' : 'office';
+
+            const $state = $('#' + currentContext + '_state');
+            const $city  = $('#' + currentContext + '_city');
+            const currentState = $state.val();
+            const currentCity  = $city.val();
+
+            function setOfficeId() {
+                const $sel = $('#econt_office_id');
+                if (!$sel.length) return;
+                const targetId = String(point.id);
+                let exists = false;
+                $sel.find('option').each(function () {
+                    if (String($(this).val()) === targetId) { exists = true; return false; }
+                });
+                if (!exists) {
+                    const label = point.id + ' ' + point.name + (point.address ? ' - ' + point.address : '');
+                    $sel.append(new Option(label, point.id, true, true));
+                }
+                $sel.val(targetId).trigger('change.select2');
+                $sel.trigger('change');
+            }
+
+            function setDeliveryType(done) {
+                const cur = $('input[name="econt_delivery_type"]:checked').val();
+                if (cur === targetType) { done(); return; }
+                $('input[name="econt_delivery_type"][value="' + targetType + '"]').prop('checked', true).trigger('change');
+                // handleDeliveryTypeChange will rebuild showPointsDropdown → wait.
+                waitFor(function () { return !!$('#econt_office_id').length; }, done);
+            }
+
+            // Simple promise-less poll, 200ms × up to 50 (=10s).
+            function waitFor(predicate, done, attempts) {
+                attempts = (attempts === undefined) ? 50 : attempts;
+                if (predicate()) { setTimeout(done, 100); return; }
+                if (attempts <= 0) { return; }
+                setTimeout(function () { waitFor(predicate, done, attempts - 1); }, 200);
+            }
+
+            const sameState = !targetRegion || currentState === targetRegion;
+            const sameCity  = currentCity === targetCityId;
+
+            if (sameState && sameCity) {
+                setDeliveryType(setOfficeId);
+                return;
+            }
+
+            if (!sameState) {
+                $state.val(targetRegion).trigger('change');
+                // bindStateChangeHandler will reload cities + replace city select.
+                waitFor(function () {
+                    return $('#' + currentContext + '_city option[value="' + targetCityId + '"]').length > 0;
+                }, function () {
+                    $('#' + currentContext + '_city').val(targetCityId).trigger('change', { force: true });
+                    waitFor(function () { return $('#econt-delivery-type-field').length > 0; }, function () {
+                        setDeliveryType(setOfficeId);
+                    });
+                });
+                return;
+            }
+
+            // Same state, different city.
+            $city.val(targetCityId).trigger('change');
+            waitFor(function () { return $('#econt-delivery-type-field').length > 0; }, function () {
+                setDeliveryType(setOfficeId);
+            });
+        }
+        // ──────────────────────────────────────────────────────────────────
 
         // Store original HTML for both contexts to restore later
         const originals = {
@@ -229,8 +411,10 @@
 
             // Econt is selected — set up / restore UI.
             // If our select2 city is still in the DOM, WC didn't rebuild — nothing
-            // to do (handler rebind already happened above).
+            // to do (handler rebind already happened above). Re-place the map
+            // button in case WC's order-review HTML clobbered it.
             if ($('#' + currentContext + '_city').hasClass('select2-hidden-accessible')) {
+                placeMapButton();
                 return;
             }
 
@@ -253,6 +437,15 @@
         });
 
         // Listen for "Ship to different address" toggle
+        // Payment-method change → re-quote, because Econt's getPrice includes
+        // a `cod` flag in the payload and may add a COD-handling fee. Delegated
+        // on document.body so it survives WC's payment-block re-renders.
+        $(document.body).on('change', 'input[name="payment_method"]', function() {
+            if (isEcontActive) {
+                recalculatePrice();
+            }
+        });
+
         $('form.checkout').on('change', '#ship-to-different-address-checkbox', function() {
             // If Econt is active, we need to switch contexts
             if (isEcontActive) {
@@ -324,12 +517,13 @@
                 $('#' + currentContext + '_city_field').hide();
                 settingUp = false;
                 bindStateChangeHandler();
+                placeMapButton();
                 return;
             }
 
             // Load cities (cached or AJAX) then continue the chain
             loadCities(effectiveState, function(cities) {
-                if (!cities) { settingUp = false; bindStateChangeHandler(); return; }
+                if (!cities) { settingUp = false; bindStateChangeHandler(); placeMapButton(); return; }
 
                 replaceCityInputWithSelect(cities, preSelectCity, true); // skip auto-trigger
 
@@ -340,6 +534,7 @@
                     // No city matched — user will have to pick one
                     settingUp = false;
                     bindStateChangeHandler();
+                    placeMapButton();
                     return;
                 }
 
@@ -351,6 +546,7 @@
 
                     settingUp = false;
                     bindStateChangeHandler();
+                    placeMapButton();
 
                     // Initial setup done — fetch price for the restored selection.
                     recalculatePrice();
@@ -435,6 +631,7 @@
                 // State changed — remove stale delivery options
                 $('#econt-delivery-type-field').remove();
                 $('#econt-office-field').remove();
+                $('#econt-map-button-wrapper').remove();
                 $('#econt-service-field').remove();
                 lastDeliveryType = 'address';
                 lastOfficeId = '';
@@ -580,6 +777,7 @@
             
             $('#econt-delivery-type-field').remove();
             $('#econt-office-field').remove();
+                $('#econt-map-button-wrapper').remove();
             $('#econt-service-field').remove();
 
             $cityField.show();
@@ -682,6 +880,7 @@
         function presentDeliveryOptions(data) {
             $('#econt-delivery-type-field').remove();
             $('#econt-office-field').remove();
+                $('#econt-map-button-wrapper').remove();
             $('#econt-service-field').remove();
 
             const $address1Field = $('#' + currentContext + '_address_1_field');
@@ -718,6 +917,9 @@
             $('#' + currentContext + '_city_field').after(radioHtml);
 
             $('input[name="econt_delivery_type"]').on('change', function() {
+                // Block FIRST so the throbber appears before the (potentially
+                // 100-300ms) DOM/select2 rebuild in handleDeliveryTypeChange.
+                blockOrderReview();
                 handleDeliveryTypeChange($(this).val());
                 // Delivery type changed → fetch price then refresh totals.
                 recalculatePrice();
@@ -728,10 +930,12 @@
                 $('input[name="econt_delivery_type"][value="' + lastDeliveryType + '"]').prop('checked', true);
             }
             handleDeliveryTypeChange(lastDeliveryType);
+            placeMapButton();
         }
 
         function handleDeliveryTypeChange(type) {
             $('#econt-office-field').remove();
+                $('#econt-map-button-wrapper').remove();
             $('#econt-service-field').remove();
 
             sessionStorage.setItem('econt_delivery_type', type);
@@ -768,6 +972,7 @@
 
                 showPointsDropdown(points, type);
             }
+            placeMapButton();
         }
 
         function showPointsDropdown(points, type) {
@@ -826,8 +1031,9 @@
                 recalculatePrice();
             });
 
-            // Map button removed — see top-of-file note. Office is selected
-            // through the select2 dropdown above.
+            // Map button is now placed via placeMapButton() below — it lives
+            // independent of the dropdown and stays visible across delivery-
+            // type changes.
         }
 
         // Service-selector (refreshServiceSelector, updateEcontPriceInUI) and the

@@ -9,3 +9,6 @@ node_modules/
 
 # WordPress unit tests
 /tests/
+
+# Playwright artifacts (when tests are run from this directory)
+/test-results/

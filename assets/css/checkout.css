@@ -130,3 +130,190 @@
     border: 0;
     border-radius: 0 0 5px 5px;
 }
+
+/* ── Office/automat map modal ────────────────────────────── */
+.drushfe-map-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 99999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.drushfe-map-modal.is-open {
+    display: flex;
+}
+
+.drushfe-map-modal__content {
+    background: #fff;
+    width: 90vw;
+    max-width: 960px;
+    height: 80vh;
+    max-height: 720px;
+    border-radius: 6px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.drushfe-map-modal__title {
+    margin: 0;
+    padding: 14px 48px 14px 18px;
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.drushfe-map-modal__close {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 0;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: #555;
+    padding: 0;
+}
+
+.drushfe-map-modal__close:hover { color: #000; }
+
+.drushfe-map-modal__map {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 300px;
+}
+
+.drushfe-map-modal__hint {
+    margin: 0;
+    padding: 8px 18px;
+    border-top: 1px solid #e5e5e5;
+    font-size: 12px;
+    color: #666;
+    background: #f7f7f7;
+}
+
+.drushfe-map-popup {
+    min-width: 180px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Filter strip inside the office map modal */
+.drushfe-map-modal__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fafafa;
+    font-size: 13px;
+}
+
+.drushfe-map-modal__radios {
+    display: flex;
+    gap: 8px;
+}
+
+.drushfe-map-modal__radios label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+}
+
+.drushfe-map-modal__search {
+    flex: 1 1 200px;
+    min-width: 180px;
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.drushfe-map-modal__count {
+    color: #666;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.drushfe-map-popup__city {
+    color: #555;
+    font-size: 12px;
+}
+
+/* Search input + suggestions list */
+.drushfe-map-modal__search-wrap {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 200px;
+    /* Own stacking context so the dropdown reliably renders above the
+       Leaflet map canvas below it (Leaflet panes use z-index 400–800). */
+    z-index: 1000;
+}
+
+.drushfe-map-modal__search-wrap .drushfe-map-modal__search {
+    width: 100%;
+}
+
+.drushfe-map-modal__suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 2px 0 0 0;
+    padding: 0;
+    list-style: none;
+    max-height: 260px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    /* Leaflet panes occupy z-index 400–800 (popup pane at 700, controls at
+       800). The suggestion list must sit clearly above all of them so the
+       map canvas doesn't paint over it immediately after we render. */
+    z-index: 1001;
+    font-size: 13px;
+}
+
+.drushfe-map-modal__suggestions li {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    line-height: 1.35;
+}
+
+.drushfe-map-modal__suggestions li:last-child { border-bottom: 0; }
+.drushfe-map-modal__suggestions li:hover { background: #f4f9ff; }
+
+.drushfe-map-modal__suggestion-empty {
+    color: #888;
+    font-style: italic;
+    cursor: default !important;
+}
+.drushfe-map-modal__suggestion-empty:hover { background: transparent !important; }
+
+.drushfe-map-modal__sug-name {
+    font-weight: 600;
+}
+
+.drushfe-map-modal__sug-city {
+    color: #555;
+    font-size: 12px;
+}
+
+.drushfe-map-modal__sug-addr {
+    color: #777;
+    font-size: 12px;
+}

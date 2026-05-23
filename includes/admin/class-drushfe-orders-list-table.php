@@ -168,30 +168,37 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 
 	/**
 	 * Cancel multiple shipments in a single LabelService.deleteLabels call.
+	 *
+	 * LabelService lives on ee.econt.com (NOT delivery.econt.com — that has
+	 * OrdersService.deleteLabel which is single-id). It's keyed by the
+	 * 13-digit `shipmentNumber` from the createAWB response, not by the
+	 * internal `_drushfe_waybill_id`. Orders that have no shipmentNumber
+	 * (e.g. their waybill draft never made it through createAWB) are
+	 * reported as errors so the user knows to regenerate before cancelling.
 	 */
 	private function bulk_cancel( array $order_ids, array $result ): array {
-		$id_to_waybill = [];
+		// Build (order_id => shipmentNumber) for orders that have an AWB.
+		$id_to_shipment = [];
 		foreach ( $order_ids as $order_id ) {
 			$order = wc_get_order( $order_id );
 			if ( ! $order ) {
 				continue;
 			}
-			$waybill_id = (string) $order->get_meta( '_drushfe_waybill_id' );
-			if ( '' !== $waybill_id ) {
-				$id_to_waybill[ $order_id ] = $waybill_id;
+			$resp = $order->get_meta( '_drushfe_waybill_response' );
+			$ship = is_array( $resp ) ? (string) ( $resp['shipmentNumber'] ?? '' ) : '';
+			if ( '' === $ship ) {
+				/* translators: %d: order ID */
+				$result['errors'][] = sprintf( __( 'Order #%d: no AWB shipmentNumber (regenerate the waybill first).', 'drusoft-shipping-for-econt' ), (int) $order_id );
+				continue;
 			}
+			$id_to_shipment[ $order_id ] = $ship;
 		}
 
-		if ( empty( $id_to_waybill ) ) {
-			$result['errors'][] = __( 'None of the selected orders have a waybill.', 'drusoft-shipping-for-econt' );
+		if ( empty( $id_to_shipment ) ) {
 			return $result;
 		}
 
-		$first_order = wc_get_order( array_key_first( $id_to_waybill ) );
-		if ( ! method_exists( 'Drushfe_Actions', 'init' ) ) {
-			// Defensive — admin actions class should always be loaded by this point.
-			require_once __DIR__ . '/class-drushfe-actions.php';
-		}
+		$first_order = wc_get_order( array_key_first( $id_to_shipment ) );
 		$ctx = $this->resolve_api_context_for_order( $first_order );
 		if ( ! $ctx ) {
 			$result['errors'][] = __( 'Econt API credentials not configured.', 'drusoft-shipping-for-econt' );
@@ -199,10 +206,10 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 		}
 
 		$response = wp_remote_post(
-			$ctx['base'] . 'services/Shipments/LabelService.deleteLabels.json',
+			$ctx['ee_base'] . 'services/Shipments/LabelService.deleteLabels.json',
 			[
 				'headers' => $ctx['headers'],
-				'body'    => wp_json_encode( [ 'shipmentNumbers' => array_values( $id_to_waybill ) ] ),
+				'body'    => wp_json_encode( [ 'shipmentNumbers' => array_values( $id_to_shipment ) ] ),
 				'timeout' => 30,
 			]
 		);
@@ -219,13 +226,13 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 			return $result;
 		}
 
-		// Map per-row results back to order IDs.
-		$row_results = is_array( $body['results'] ?? null ) ? $body['results'] : [];
-		$wb_to_id    = array_flip( $id_to_waybill );
+		// Map per-row results back to order IDs via shipmentNumber.
+		$row_results    = is_array( $body['results'] ?? null ) ? $body['results'] : [];
+		$shipment_to_id = array_flip( $id_to_shipment );
 
 		foreach ( $row_results as $row ) {
-			$wb = (string) ( $row['shipmentNum'] ?? '' );
-			$oid = $wb_to_id[ $wb ] ?? 0;
+			$ship = (string) ( $row['shipmentNum'] ?? '' );
+			$oid  = $shipment_to_id[ $ship ] ?? 0;
 			if ( ! $oid ) {
 				continue;
 			}
@@ -239,8 +246,8 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 				$order->delete_meta_data( '_drushfe_waybill_id' );
 				$order->delete_meta_data( '_drushfe_waybill_response' );
 				$order->delete_meta_data( '_drushfe_courier_requested' );
-				/* translators: %s: Econt waybill ID */
-				$order->add_order_note( sprintf( __( 'Econt shipment %s cancelled (bulk).', 'drusoft-shipping-for-econt' ), $wb ) );
+				/* translators: %s: Econt shipment number */
+				$order->add_order_note( sprintf( __( 'Econt shipment %s cancelled (bulk).', 'drusoft-shipping-for-econt' ), $ship ) );
 				$order->save();
 			}
 			$result['processed']++;
@@ -276,6 +283,7 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 		$is_demo = ! empty( $settings['econt_test_mode'] ) && 'yes' === $settings['econt_test_mode'];
 		return [
 			'base'    => $is_demo ? 'https://delivery-demo.econt.com/' : 'https://delivery.econt.com/',
+			'ee_base' => $is_demo ? 'https://demo.econt.com/ee/' : 'https://ee.econt.com/',
 			'headers' => [
 				'Content-Type'  => 'application/json',
 				'Authorization' => $settings['econt_private_key'],
@@ -302,7 +310,7 @@ class Drushfe_Orders_List_Table extends WP_List_Table {
 			'paged'        => $paged,
 			'orderby'      => 'date',
 			'order'        => 'DESC',
-			'meta_key'     => '_drushfe_order_data', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Required to filter Econt orders.
+			'meta_key'     => '_drushfe_econt_order', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Tag written by Drushfe_Shipping_Method::save_shipping_data_to_order().
 			'meta_compare' => 'EXISTS',
 			'paginate'     => true, // Required to get total count
 		];

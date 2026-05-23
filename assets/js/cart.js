@@ -42,9 +42,11 @@
         const postcode = $('#calc_shipping_postcode').val() || '';
         const state    = $('#calc_shipping_state').val() || '';
 
-        // Office mode requires an office; cart page doesn't pick one (that
-        // happens on checkout), so office mode on cart = incomplete.
-        const incomplete = !cityId || deliveryType === 'office' || deliveryType === 'automat';
+        // Only "no city" is genuinely incomplete on the cart page. For
+        // office/automat mode we don't have an office picker, but the server
+        // picks a joker office (first office / first APS for the city) so
+        // the user still gets a representative price preview.
+        const incomplete = !cityId;
 
         flowVersion += 1;
         const myVersion = flowVersion;
@@ -153,6 +155,12 @@
                 if (state) {
                     handleCalculatorStateChange(state);
                 }
+
+                // Initial price calc — covers the case where the user
+                // landed on the cart with WC session-state already pointing
+                // to a city, just clicked the Econt radio, and now expects
+                // a shipping cost to show up without further input.
+                recalculatePriceIfReady();
             }
         });
     });
@@ -221,10 +229,59 @@
         // or hide the entire selector when only address is available.
         updateRadioVisibilityUI(cachedHasOffices, cachedHasAutomats);
 
-        // If we already fetched cities, rebuild the dropdown from cache
-        if (cachedCities && lastStateProcessed) {
-            replaceCalculatorCityWithSelect(cachedCities);
+        // If we already fetched cities, rebuild the dropdown from cache.
+        // WC sometimes replaces the cart fragment a second time after our
+        // updated_cart_totals handler runs — without re-firing the event —
+        // which reverts our <select> back to the default <input>. We re-check
+        // on a short timeout and re-apply when needed.
+        ensureCitySelect2();
+
+        // Fire a price calc so the shipping line shows a real cost on the
+        // first render — handlers below only re-fire on explicit user changes.
+        recalculatePriceIfReady();
+    }
+
+    /**
+     * Re-apply our select2-ified city dropdown if WC has reverted it to its
+     * native <input> (which happens after some update_cart cycles, sometimes
+     * a tick after updated_cart_totals fires). Idempotent — bails if the
+     * field is already select2 or if we don't have cached cities to work with.
+     *
+     * Called from restoreEcontUI plus polled briefly after every cart update
+     * to defend against late DOM rebuilds.
+     */
+    function ensureCitySelect2(retries) {
+        if (typeof retries !== 'number') retries = 5;
+        if (!isEcontActive) return;
+        if (!cachedCities || !lastStateProcessed) return;
+
+        const $city = $('#calc_shipping_city');
+        if (!$city.length) {
+            // Cart calculator not in the DOM yet — try again briefly.
+            if (retries > 0) setTimeout(() => ensureCitySelect2(retries - 1), 100);
+            return;
         }
+
+        // Already a select2'd select? Nothing to do.
+        if ($city.is('select') && $city.hasClass('select2-hidden-accessible')) {
+            // Still poll once more in case WC rebuilds it again.
+            if (retries > 0) setTimeout(() => ensureCitySelect2(retries - 1), 100);
+            return;
+        }
+
+        replaceCalculatorCityWithSelect(cachedCities);
+        if (retries > 0) setTimeout(() => ensureCitySelect2(retries - 1), 100);
+    }
+
+    /**
+     * Fire recalculatePrice() iff we have enough state to produce a quote.
+     * Used in initial-load paths where the user hasn't *changed* anything
+     * but the page restored prior selections from the WC session.
+     */
+    function recalculatePriceIfReady() {
+        const cityId = params.current_city_id || $('#calc_shipping_city').val() || '';
+        if (!cityId) return;
+        recalculatePrice();
     }
 
     /* ─── Main entry on first load ────────────────────────── */
@@ -270,6 +327,12 @@
             if (state) {
                 handleCalculatorStateChange(state);
             }
+
+            // Initial price calc — covers the page-load case where Econt was
+            // already selected (e.g. from a previous visit's WC session) and
+            // a city is set, but no change event has fired since the last
+            // clear_price.
+            recalculatePriceIfReady();
         } else {
             $('#econt-cart-selector').remove();
             resetCalculatorUI();

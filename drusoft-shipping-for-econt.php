@@ -3,14 +3,14 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     0.1.0
+ * Version:     0.1.3
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
  * Domain Path: /languages
  * Requires at least: 6.0
- * Tested up to: 6.9
- * Requires PHP: 7.4
+ * Tested up to: 7.0
+ * Requires PHP: 8.0
  * Requires Plugins: woocommerce
  * WC requires at least: 8.0
  * WC tested up to: 9.8
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '0.1.0' );
+define( 'DRUSHFE_VER',  '0.1.3' );
 
 /**
  * Load Dependencies
@@ -161,6 +161,24 @@ add_filter( 'woocommerce_shipping_methods', 'drushfe_register_method' );
 function drushfe_register_method( $methods ) {
 	$methods['drushfe_econt'] = 'Drushfe_Shipping_Method';
 	return $methods;
+}
+
+/**
+ * Hide the plugin's internal shipping-item meta keys from WC's admin
+ * order-items view. WC ignores the leading-underscore convention there
+ * and renders every meta key by default, which leaks `_drushfe_*` rows
+ * into the customer-facing admin UI.
+ *
+ * @param string[] $hidden_keys
+ * @return string[]
+ */
+add_filter( 'woocommerce_hidden_order_itemmeta', 'drushfe_hide_internal_item_meta' );
+function drushfe_hide_internal_item_meta( array $hidden_keys ): array {
+	return array_merge( $hidden_keys, [
+		'_drushfe_delivery_type',
+		'_drushfe_office_id',
+		'missing_address',
+	] );
 }
 
 /**
@@ -450,6 +468,18 @@ function drushfe_enqueue_scripts(): void {
 			'alert_select_city' => __( 'Please select a city first.', 'drusoft-shipping-for-econt' ),
 			'no_results'       => __( 'No results', 'drusoft-shipping-for-econt' ),
 			'select_service'   => __( 'Select Service', 'drusoft-shipping-for-econt' ),
+			'map_title'         => __( 'Pick an Econt office or automat', 'drusoft-shipping-for-econt' ),
+			'map_title_office'  => __( 'Pick an Econt office', 'drusoft-shipping-for-econt' ),
+			'map_title_automat' => __( 'Pick an Econt automat', 'drusoft-shipping-for-econt' ),
+			'map_hint'          => __( 'Filter by type or search by city/name, click a marker, then choose "Select" in the popup.', 'drusoft-shipping-for-econt' ),
+			'map_pick'          => __( 'Select this point', 'drusoft-shipping-for-econt' ),
+			'map_error'         => __( 'Map could not be loaded:', 'drusoft-shipping-for-econt' ),
+			'map_filter_office'  => __( 'Offices', 'drusoft-shipping-for-econt' ),
+			'map_filter_automat' => __( 'Automats', 'drusoft-shipping-for-econt' ),
+			'map_filter_both'    => __( 'Both', 'drusoft-shipping-for-econt' ),
+			'map_search_placeholder' => __( 'Search by city, office name, address…', 'drusoft-shipping-for-econt' ),
+			'map_results_count'      => __( '{n} results', 'drusoft-shipping-for-econt' ),
+			'map_search_no_results'  => __( 'No matches', 'drusoft-shipping-for-econt' ),
 		)
 	);
 
@@ -464,10 +494,23 @@ function drushfe_enqueue_scripts(): void {
 	);
 
 	if ( is_checkout() ) {
+		// Map module — Leaflet itself is lazy-loaded from CDN on first
+		// "Open Map" click, so this file is tiny (~6KB) and safe to ship
+		// on every checkout render.
+		wp_enqueue_script(
+			'drushfe-map',
+			DRUSHFE_URL . 'assets/js/map.js',
+			// Depends on drushfe-common for EcontModern.transliterate() — used
+			// by the in-modal search so Latin input matches Cyrillic content.
+			array( 'jquery', 'drushfe-common' ),
+			DRUSHFE_VER,
+			true
+		);
+
 		wp_enqueue_script(
 			'drushfe-checkout',
 			DRUSHFE_URL . 'assets/js/checkout.js',
-			array( 'jquery', 'select2', 'drushfe-common' ),
+			array( 'jquery', 'select2', 'drushfe-common', 'drushfe-map' ),
 			DRUSHFE_VER,
 			true
 		);
@@ -656,14 +699,17 @@ function drushfe_get_office_label_by_id( int $office_id ): int|string {
 }
 
 /**
- * AJAX Handler for searching cities via Econt API.
+ * AJAX Handler for searching cities via the local sync table.
  * Used by Select2 in admin settings.
+ *
+ * Previously hit api.econt.bg/v1/location/site (Speedy-shaped, userName+
+ * password) which doesn't exist on Econt's API. The wp_drushfe_cities table
+ * is populated by Drushfe_Syncer and is authoritative — no live API needed.
  */
 add_action( 'wp_ajax_drushfe_search_cities', 'drushfe_search_cities' );
 function drushfe_search_cities(): void {
 	check_ajax_referer( 'drushfe_admin', 'nonce' );
 
-	// Check permissions
 	if ( ! current_user_can( 'manage_woocommerce' ) ) {
 		wp_send_json_error( __( 'Permission denied.', 'drusoft-shipping-for-econt' ) );
 	}
@@ -673,55 +719,32 @@ function drushfe_search_cities(): void {
 		wp_send_json_success( [] );
 	}
 
-	// We need credentials to query the API.
-	// Since this is a global AJAX handler, we need to find *some* valid credentials.
-	// We'll try to get them from the first configured instance.
-	$credentials = drushfe_get_first_credentials();
-	$username = $credentials['username'] ?? '';
-	$password = $credentials['password'] ?? '';
+	global $wpdb;
+	$like = '%' . $wpdb->esc_like( $term ) . '%';
 
-	if ( empty( $username ) || empty( $password ) ) {
-		wp_send_json_error( __( 'No API credentials found.', 'drusoft-shipping-for-econt' ) );
-	}
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT id, name, region, post_code FROM {$wpdb->prefix}drushfe_cities WHERE name LIKE %s ORDER BY name ASC LIMIT 50",
+			$like
+		)
+	);
 
-	// Call Econt API
-	$body = json_encode( [
-		'userName' => $username,
-		'password' => $password,
-		'language' => 'BG',
-		'countryId' => 100, // Bulgaria
-		'name'     => $term,
-	] );
-
-	$response = wp_remote_post( 'https://api.econt.bg/v1/location/site', [
-		'headers' => [ 'Content-Type' => 'application/json' ],
-		'body'    => $body,
-		'timeout' => 10,
-	] );
-
-	if ( is_wp_error( $response ) ) {
-		wp_send_json_error( $response->get_error_message() );
-	}
-
-	$data = json_decode( wp_remote_retrieve_body( $response ), true );
 	$results = [];
-
-	if ( isset( $data['sites'] ) && is_array( $data['sites'] ) ) {
-		foreach ( $data['sites'] as $site ) {
-			// Format: "Sofia, Stolichna"
-			$label = $site['name'];
-			if ( ! empty( $site['municipality'] ) ) {
-				$label .= ', ' . $site['municipality'];
+	if ( $rows ) {
+		foreach ( $rows as $row ) {
+			$label = $row->name;
+			if ( ! empty( $row->region ) ) {
+				$label .= ', ' . $row->region;
 			}
-			
-			$results[] = [
-				'id'   => $site['id'], 
-				'text' => $label
-			];
+			if ( ! empty( $row->post_code ) ) {
+				$label .= ' (' . $row->post_code . ')';
+			}
+			$results[] = [ 'id' => (int) $row->id, 'text' => $label ];
 		}
 	}
 
-	wp_send_json( [ 'results' => $results ] ); // Select2 v4+ expects results in a 'results' key
+	wp_send_json( [ 'results' => $results ] );
 }
 
 /**
@@ -764,63 +787,6 @@ function drushfe_search_offices(): void {
 	} else {
 		wp_send_json_error( __( 'Shipping method class not found.', 'drusoft-shipping-for-econt' ) );
 	}
-}
-
-/**
- * AJAX Handler for file uploads in admin settings.
- */
-add_action( 'wp_ajax_drushfe_upload_file', 'drushfe_upload_file' );
-function drushfe_upload_file(): void {
-	check_ajax_referer( 'drushfe_admin', 'nonce' );
-
-	// Check permissions
-	if ( ! current_user_can( 'manage_woocommerce' ) ) {
-		wp_send_json_error( __( 'Permission denied.', 'drusoft-shipping-for-econt' ) );
-	}
-
-	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- $_FILES is validated by wp_handle_upload / wp_check_filetype.
-	if ( ! isset( $_FILES['file'] ) || empty( $_FILES['file']['name'] ) ) {
-		wp_send_json_error( __( 'No file uploaded.', 'drusoft-shipping-for-econt' ) );
-	}
-
-	// Validate file type (CSV only)
-	$file_type = wp_check_filetype( sanitize_file_name( wp_unslash( $_FILES['file']['name'] ) ) );
-	if ( 'csv' !== $file_type['ext'] ) {
-		wp_send_json_error( __( 'Invalid file type. Please upload a CSV file.', 'drusoft-shipping-for-econt' ) );
-	}
-
-	if ( ! function_exists( 'wp_handle_upload' ) ) {
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-	}
-
-	// Redirect uploads to a dedicated directory.
-	$upload_filter = static function ( $uploads ) {
-		$uploads['subdir'] = '/econt_shipping';
-		$uploads['path']   = $uploads['basedir'] . '/econt_shipping';
-		$uploads['url']    = $uploads['baseurl'] . '/econt_shipping';
-		return $uploads;
-	};
-	add_filter( 'upload_dir', $upload_filter );
-
-	$overrides = [
-		'test_form' => false,
-		'mimes'     => [ 'csv' => 'text/csv' ],
-	];
-
-	$uploaded = wp_handle_upload( $_FILES['file'], $overrides ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-
-	remove_filter( 'upload_dir', $upload_filter );
-
-	if ( isset( $uploaded['error'] ) ) {
-		wp_send_json_error( $uploaded['error'] );
-	}
-
-	update_option( 'drushfe_fileceni_path', $uploaded['file'] );
-
-	wp_send_json_success( [
-		'path' => $uploaded['file'],
-		'name' => basename( $uploaded['file'] ),
-	] );
 }
 
 /**
@@ -1024,11 +990,12 @@ function drushfe_check_availability_ajax(): void {
 
 	global $wpdb;
 
-	// Fetch all offices/automats for this city
+	// Fetch all offices/automats for this city. We also pull lat/lng + address so
+	// the front-end can plot them on a Leaflet map without an extra round-trip.
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	$results = $wpdb->get_results(
 		$wpdb->prepare(
-			"SELECT id, name, address, office_type FROM {$wpdb->prefix}drushfe_offices WHERE city_id = %d ORDER BY name ASC",
+			"SELECT id, name, address, office_type, latitude, longitude FROM {$wpdb->prefix}drushfe_offices WHERE city_id = %d ORDER BY name ASC",
 			$city_id
 		)
 	);
@@ -1037,9 +1004,16 @@ function drushfe_check_availability_ajax(): void {
 	$automats = [];
 
 	foreach ( $results as $row ) {
+		$lat = (float) $row->latitude;
+		$lng = (float) $row->longitude;
 		$item = [
-			'id'    => $row->id,
-			'label' => sprintf( '%s %s - %s', $row->id, $row->name, $row->address )
+			'id'      => $row->id,
+			'label'   => sprintf( '%s %s - %s', $row->id, $row->name, $row->address ),
+			'name'    => $row->name,
+			'address' => $row->address,
+			// 0/0 lat/lng means missing — let the JS decide whether to show on map.
+			'lat'     => $lat,
+			'lng'     => $lng,
 		];
 
 		if ( drushfe_is_automat( $row->office_type, $row->name ) ) {
@@ -1055,6 +1029,79 @@ function drushfe_check_availability_ajax(): void {
 		'offices'     => $offices,
 		'automats'    => $automats
 	] );
+}
+
+/**
+ * AJAX Handler: Return ALL Econt offices + automats with lat/lng + region code.
+ *
+ * Used by the office-map modal when the user opens the map without having
+ * selected a city yet (or wants to pick an office in another city). The
+ * response is identical for every visitor, so we cache it in a 24h transient.
+ *
+ * Each row includes the city's `region_code` (BG-XX) so JS can switch the WC
+ * state select to the right value when the user picks a marker in another city.
+ */
+add_action( 'wp_ajax_drushfe_get_all_offices', 'drushfe_get_all_offices_ajax' );
+add_action( 'wp_ajax_nopriv_drushfe_get_all_offices', 'drushfe_get_all_offices_ajax' );
+
+function drushfe_get_all_offices_ajax(): void {
+	check_ajax_referer( 'drushfe_public', 'nonce' );
+
+	$cached = get_transient( 'drushfe_all_offices' );
+	if ( false !== $cached ) {
+		wp_send_json_success( $cached );
+	}
+
+	global $wpdb;
+
+	// Reverse region map so we can attach BG-XX codes to each row.
+	$region_map     = drushfe_get_region_map();
+	$reverse_region = array_flip( $region_map );
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$rows = $wpdb->get_results(
+		"SELECT o.id, o.name, o.address, o.office_type, o.latitude, o.longitude,
+		        o.city_id, c.name AS city_name, c.region, c.post_code, c.type AS city_type
+		   FROM {$wpdb->prefix}drushfe_offices o
+		   JOIN {$wpdb->prefix}drushfe_cities c ON c.id = o.city_id
+		  WHERE o.latitude IS NOT NULL AND o.longitude IS NOT NULL
+		  ORDER BY c.name ASC, o.name ASC"
+	);
+
+	$payload = [];
+	foreach ( (array) $rows as $row ) {
+		$lat = (float) $row->latitude;
+		$lng = (float) $row->longitude;
+		if ( $lat === 0.0 && $lng === 0.0 ) {
+			continue;
+		}
+		// Map Econt's regionName → BG-XX ISO code (fuzzy match for partial names).
+		$region_code = $reverse_region[ $row->region ] ?? '';
+		if ( ! $region_code ) {
+			foreach ( $reverse_region as $name => $code ) {
+				if ( mb_stripos( $row->region, $name ) !== false ) {
+					$region_code = $code;
+					break;
+				}
+			}
+		}
+
+		$payload[] = [
+			'id'          => $row->id,
+			'name'        => $row->name,
+			'address'     => $row->address,
+			'office_type' => $row->office_type,  // 'APS' or 'OFFICE' — JS picks the delivery-type radio from this
+			'lat'         => $lat,
+			'lng'         => $lng,
+			'city_id'     => (int) $row->city_id,
+			'city_name'   => trim( ( $row->city_type ?: '' ) . ' ' . $row->city_name ),
+			'postcode'    => $row->post_code,
+			'region_code' => $region_code,
+		];
+	}
+
+	set_transient( 'drushfe_all_offices', $payload, DAY_IN_SECONDS );
+	wp_send_json_success( $payload );
 }
 
 /**
@@ -1172,6 +1219,33 @@ function drushfe_get_joker_street_for_city( int $city_id, string $base_url ): ?s
 	$first = $streets[0];
 	$name  = $first['name'] ?? '';
 	return $name !== '' ? (string) $name : null;
+}
+
+/**
+ * Pick a joker office code for price-quoting in office/automat mode when
+ * the caller doesn't specify one. Used on the cart page where the user
+ * hasn't picked a specific office yet — Econt's prices are uniform per
+ * city for the same office class, so any office of the right type is fine.
+ *
+ * @param int    $city_id Econt city ID.
+ * @param string $type    'office' or 'automat'.
+ * @return string|null Office code or null when none exists.
+ */
+function drushfe_get_joker_office_for_city( int $city_id, string $type ): ?string {
+	if ( $city_id <= 0 ) {
+		return null;
+	}
+	global $wpdb;
+	$wanted_type = ( 'automat' === $type ) ? 'APS' : 'OFFICE';
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$code = $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT id FROM {$wpdb->prefix}drushfe_offices WHERE city_id = %d AND office_type = %s ORDER BY id ASC LIMIT 1",
+			$city_id,
+			$wanted_type
+		)
+	);
+	return $code ? (string) $code : null;
 }
 
 /**
@@ -1389,7 +1463,9 @@ function drushfe_calculate_price_ajax(): void {
 			'countryCode'  => 'BGR',
 			'cityName'     => $city_name,
 			'postCode'     => $postcode,
-			'officeCode'   => ( 'office' === $delivery_type || 'automat' === $delivery_type ) ? $office_code : '',
+			// office_code may be empty on cart-page calls (no office picker there).
+			// We fall back to a joker office below — leaving this empty for now.
+			'officeCode'   => '',
 			'zipCode'      => '',
 			'priorityFrom' => '',
 			'priorityTo'   => '',
@@ -1417,6 +1493,15 @@ function drushfe_calculate_price_ajax(): void {
 			// user's typed address and let Econt's validator decide.
 			$payload['customerInfo']['address'] = $address;
 		}
+	}
+
+	// Office/automat-mode joker: the cart page has no office picker, so the
+	// caller may send an empty office_code. Pick the first office (or first
+	// APS for automat) in the city — prices are uniform per office class
+	// within a city, so this gives an accurate preview.
+	if ( 'office' === $delivery_type || 'automat' === $delivery_type ) {
+		$resolved_office = $office_code !== '' ? $office_code : (string) ( drushfe_get_joker_office_for_city( $city_id, $delivery_type ) ?? '' );
+		$payload['customerInfo']['officeCode'] = $resolved_office;
 	}
 
 	$items_desc = [];

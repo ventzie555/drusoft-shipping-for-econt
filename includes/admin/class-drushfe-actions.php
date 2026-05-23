@@ -41,11 +41,17 @@ class Drushfe_Actions {
 	}
 
 	/**
-	 * Cancel a shipment via Econt's LabelService.deleteLabels.json.
+	 * Cancel a shipment via Econt's OrdersService.deleteLabel.json.
 	 *
-	 * Request:  {shipmentNumbers: ["<waybill>"]}
-	 * Response: {results: [{shipmentNum, error: null|{type,message}}]}
-	 *           null/missing error per row = success.
+	 * Earlier this called `Shipments/LabelService.deleteLabels.json` on
+	 * delivery.econt.com — but that service lives on ee.econt.com and is
+	 * keyed by `shipmentNumber` (the 13-digit AWB number), not the
+	 * internal `id` we store as `_drushfe_waybill_id`. delivery.econt.com
+	 * exposes `OrdersService.deleteLabel` (singular) which takes the id
+	 * directly and is the right call for a single-order cancel.
+	 *
+	 * Request:  {id: <int waybill_id>}
+	 * Response: top-level `type` non-empty = error; otherwise success.
 	 */
 	public static function cancel_shipment(): void {
 		check_ajax_referer( 'drushfe_actions', 'nonce' );
@@ -75,10 +81,10 @@ class Drushfe_Actions {
 		}
 
 		$response = wp_remote_post(
-			$ctx['base'] . 'services/Shipments/LabelService.deleteLabels.json',
+			$ctx['base'] . 'services/OrdersService.deleteLabel.json',
 			[
 				'headers' => $ctx['headers'],
-				'body'    => wp_json_encode( [ 'shipmentNumbers' => [ $waybill_id ] ] ),
+				'body'    => wp_json_encode( [ 'id' => (int) $waybill_id ] ),
 				'timeout' => 20,
 			]
 		);
@@ -89,15 +95,8 @@ class Drushfe_Actions {
 
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		// Top-level error (auth, etc.)
 		if ( ! empty( $body['type'] ) ) {
 			wp_send_json_error( $body['message'] ?? __( 'Econt API error', 'drusoft-shipping-for-econt' ) );
-		}
-
-		// Per-shipment error
-		$row_error = $body['results'][0]['error'] ?? null;
-		if ( is_array( $row_error ) && ! empty( $row_error['message'] ) ) {
-			wp_send_json_error( $row_error['message'] );
 		}
 
 		// Success: clear waybill meta + log on the order.
@@ -152,45 +151,71 @@ class Drushfe_Actions {
 		}
 		$settings = $ctx['settings'];
 
-		// Pickup time window: today (or tomorrow after 16:00) up to the configured
-		// end-of-day (sender_time, default 17:30) in Europe/Sofia.
+		// Pickup time window in Europe/Sofia.
+		// Rules:
+		//   - If it's after 16:00, the dispatch cutoff has passed → schedule
+		//     for the next working day at 09:00.
+		//   - Weekends (Sat/Sun) get skipped to Monday.
+		//   - Bulgarian bank holidays are not detected here (we have no holiday
+		//     calendar locally); Econt will reject with "X е почивен ден" and
+		//     the merchant can retry tomorrow. Surfacing that error verbatim is
+		//     handled below.
 		$tz  = new DateTimeZone( 'Europe/Sofia' );
 		$now = new DateTime( 'now', $tz );
-		if ( (int) $now->format( 'H' ) >= 16 ) {
+
+		$is_weekend   = in_array( (int) $now->format( 'N' ), [ 6, 7 ], true ); // 6=Sat, 7=Sun
+		$after_cutoff = (int) $now->format( 'H' ) >= 16;
+
+		if ( $is_weekend || $after_cutoff ) {
 			$now->modify( '+1 day' );
+			while ( in_array( (int) $now->format( 'N' ), [ 6, 7 ], true ) ) {
+				$now->modify( '+1 day' );
+			}
+			$now->setTime( 9, 0 );
 		}
+
 		$end_hhmm  = ! empty( $settings['sender_time'] ) ? $settings['sender_time'] : '17:30';
 		$end_parts = explode( ':', $end_hhmm );
 		$end       = clone $now;
 		$end->setTime( (int) ( $end_parts[0] ?? 17 ), (int) ( $end_parts[1] ?? 30 ) );
 
-		// "From" is now (or 09:00 if we bumped to tomorrow); "to" is the configured EOD.
 		$from = clone $now;
 		if ( $from > $end ) {
 			$from->setTime( 9, 0 );
 		}
 
+		// Econt's requestCourier wants `Y-m-d H:i:s` strings — NOT ISO 8601
+		// with the `T` separator (the API rejects ATOM with "Невалиден час").
+		// `senderClient.phones` is a flat string array, NOT a `phone` field
+		// nor a `[{number: ...}]` object array.
+		$sender_phone = (string) ( $settings['sender_phone'] ?? '' );
 		$payload = [
-			'requestTimeFrom'   => $from->format( DateTime::ATOM ),
-			'requestTimeTo'     => $end->format( DateTime::ATOM ),
+			'requestTimeFrom'   => $from->format( 'Y-m-d H:i:s' ),
+			'requestTimeTo'     => $end->format( 'Y-m-d H:i:s' ),
 			'shipmentType'      => 'pack',
 			'shipmentPackCount' => 1,
 			'shipmentWeight'    => (float) ( $settings['teglo'] ?? 1 ),
 			'attachShipments'   => [ $waybill_id ],
 			'senderClient'      => [
-				'name'  => $settings['sender_name'] ?? get_bloginfo( 'name' ),
-				'phone' => $settings['sender_phone'] ?? '',
-				'email' => $settings['sender_email'] ?? get_option( 'admin_email' ),
+				'name'   => $settings['sender_name'] ?? get_bloginfo( 'name' ),
+				'phones' => $sender_phone !== '' ? [ $sender_phone ] : [],
+				'email'  => $settings['sender_email'] ?? get_option( 'admin_email' ),
 			],
 			'senderAddress'     => [
-				'city'   => [ 'name' => '', 'country' => [ 'code3' => 'BGR' ] ],
-				'street' => '',
-				'num'    => '',
+				'city'   => [
+					'name'    => drushfe_get_city_name_by_id( (int) ( $settings['sender_city'] ?? 0 ) ) ?: '',
+					'country' => [ 'code3' => 'BGR' ],
+				],
+				'street' => (string) ( $settings['sender_street'] ?? '' ),
+				'num'    => (string) ( $settings['sender_num'] ?? '' ),
 			],
 		];
 
+		// ShipmentService lives on ee.econt.com — not delivery.econt.com,
+		// which only hosts OrdersService / PaymentsService / GroupingService.
+		// Use the demo-aware ee_base so test_mode safely targets demo.econt.com.
 		$response = wp_remote_post(
-			$ctx['base'] . 'services/Shipments/ShipmentService.requestCourier.json',
+			$ctx['ee_base'] . 'services/Shipments/ShipmentService.requestCourier.json',
 			[
 				'headers' => $ctx['headers'],
 				'body'    => wp_json_encode( $payload ),
@@ -208,10 +233,17 @@ class Drushfe_Actions {
 		$already_ordered = isset( $body['type'] ) && false !== stripos( (string) $body['type'], 'AlreadyOrdered' );
 
 		if ( ! empty( $body['type'] ) && ! $already_ordered ) {
-			wp_send_json_error( $body['message'] ?? __( 'Econt courier request failed.', 'drusoft-shipping-for-econt' ) );
+			// Econt nests the real cause under innerErrors when the outer
+			// message is empty/whitespace (e.g. the "phones required" case).
+			$err_msg = trim( (string) ( $body['message'] ?? '' ) );
+			if ( '' === $err_msg && ! empty( $body['innerErrors'][0]['message'] ) ) {
+				$err_msg = (string) $body['innerErrors'][0]['message'];
+			}
+			wp_send_json_error( $err_msg !== '' ? $err_msg : __( 'Econt courier request failed.', 'drusoft-shipping-for-econt' ) );
 		}
 
 		$courier_request_id = $body['courierRequestID'] ?? '';
+		$delayed_warning    = trim( (string) ( $body['delayedRequestWarning'] ?? '' ) );
 
 		$order->update_meta_data( '_drushfe_courier_requested', 'yes' );
 		if ( $courier_request_id ) {
@@ -223,6 +255,10 @@ class Drushfe_Actions {
 				? sprintf( __( 'Courier requested (Econt ID %s).', 'drusoft-shipping-for-econt' ), $courier_request_id )
 				: __( 'Courier requested.', 'drusoft-shipping-for-econt' )
 		);
+		if ( '' !== $delayed_warning ) {
+			/* translators: %s: warning text returned by Econt */
+			$order->add_order_note( sprintf( __( 'Econt notice: %s', 'drusoft-shipping-for-econt' ), wp_strip_all_tags( $delayed_warning ) ) );
+		}
 		$order->save();
 
 		wp_send_json_success( __( 'Courier requested successfully.', 'drusoft-shipping-for-econt' ) );
@@ -259,7 +295,20 @@ class Drushfe_Actions {
 			wp_die( esc_html__( 'PDF URL is not available for this order. Regenerate the waybill to refresh it.', 'drusoft-shipping-for-econt' ) );
 		}
 
-		wp_redirect( esc_url_raw( $pdf_url ) );
+		// wp_safe_redirect() rejects off-site URLs unless the host is in the
+		// allowed_redirect_hosts list. The PDF lives on an Econt sub-domain
+		// (delivery.econt.com / delivery-demo.econt.com / labels.econt.com),
+		// so allow any *.econt.com host derived from the URL itself.
+		$pdf_host = wp_parse_url( $pdf_url, PHP_URL_HOST );
+		if ( ! is_string( $pdf_host ) || ! preg_match( '/(^|\.)econt\.com$/', $pdf_host ) ) {
+			wp_die( esc_html__( 'Unexpected PDF host — refusing to redirect.', 'drusoft-shipping-for-econt' ) );
+		}
+		add_filter( 'allowed_redirect_hosts', static function ( $hosts ) use ( $pdf_host ) {
+			$hosts[] = $pdf_host;
+			return $hosts;
+		} );
+
+		wp_safe_redirect( esc_url_raw( $pdf_url ) );
 		exit;
 	}
 
@@ -296,7 +345,11 @@ class Drushfe_Actions {
 
 		$is_demo = ! empty( $settings['econt_test_mode'] ) && 'yes' === $settings['econt_test_mode'];
 		return [
+			// `base` hosts OrdersService / PaymentsService / GroupingService.
 			'base'     => $is_demo ? 'https://delivery-demo.econt.com/' : 'https://delivery.econt.com/',
+			// `ee_base` hosts Nomenclatures + Shipments (LabelService,
+			// ShipmentService, etc.). Different host, different demo URL.
+			'ee_base'  => $is_demo ? 'https://demo.econt.com/ee/' : 'https://ee.econt.com/',
 			'headers'  => [
 				'Content-Type'  => 'application/json',
 				'Authorization' => $settings['econt_private_key'],

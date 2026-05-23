@@ -93,21 +93,27 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				'shipmentDescription' => '',
 				'shipmentNumber'      => '',
 				'clientSoftware'      => 'drusoft-shipping-for-econt',
-				'customerInfo'        => [
-					'id'           => '',
-					'name'         => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
-					'face'         => '',
-					'phone'        => $order->get_billing_phone(),
-					'email'        => $order->get_billing_email(),
-					'countryCode'  => 'BGR',
-					'cityName'     => $order->get_shipping_city() ?: $order->get_billing_city(),
-					'postCode'     => $order->get_shipping_postcode() ?: $order->get_billing_postcode(),
-					'officeCode'   => ( 'office' === $delivery_type || 'automat' === $delivery_type ) ? $office_code : '',
-					'zipCode'      => '',
-					'address'      => ( 'address' === $delivery_type ) ? trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() ) : '',
-					'priorityFrom' => '',
-					'priorityTo'   => '',
-				],
+				'customerInfo'        => array_merge(
+					[
+						'id'           => '',
+						'name'         => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
+						'face'         => '',
+						'phone'        => $order->get_billing_phone(),
+						'email'        => $order->get_billing_email(),
+						'countryCode'  => 'BGR',
+						'cityName'     => $order->get_shipping_city() ?: $order->get_billing_city(),
+						'postCode'     => $order->get_shipping_postcode() ?: $order->get_billing_postcode(),
+						'officeCode'   => ( 'office' === $delivery_type || 'automat' === $delivery_type ) ? $office_code : '',
+						'zipCode'      => '',
+						'priorityFrom' => '',
+						'priorityTo'   => '',
+					],
+					( 'address' === $delivery_type )
+						? self::build_address_fields(
+							trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() )
+						)
+						: [ 'address' => '' ]
+				),
 				'items'               => [],
 				'paymentToken'        => '',
 			];
@@ -166,16 +172,93 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				return new WP_Error( 'api_error', $msg );
 			}
 
-			if ( ! empty( $body['id'] ) ) {
-				$waybill_id = (string) $body['id'];
-				$order->update_meta_data( '_drushfe_waybill_id', $waybill_id );
-				$order->update_meta_data( '_drushfe_waybill_response', $body );
-				$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
-				$order->save();
-				return $waybill_id;
+			if ( empty( $body['id'] ) ) {
+				return new WP_Error( 'unexpected_response', __( 'Unexpected response from Econt API.', 'drusoft-shipping-for-econt' ) );
 			}
 
-			return new WP_Error( 'unexpected_response', __( 'Unexpected response from Econt API.', 'drusoft-shipping-for-econt' ) );
+			$waybill_id = (string) $body['id'];
+
+			// Econt's flow is two-step:
+			//   1. OrdersService.updateOrder  — saves the order draft, returns id.
+			//   2. OrdersService.createAWB    — promotes to an Air Waybill,
+			//                                   returns the full ShipmentStatus
+			//                                   incl. shipmentNumber + pdfURL.
+			// Without step 2 we have no PDF URL to print and no shipmentNumber
+			// to cancel against, so do it now and merge the result back into
+			// `_drushfe_waybill_response`.
+			$awb_response = wp_remote_post(
+				$base_url . 'services/OrdersService.createAWB.json',
+				[
+					'headers' => [
+						'Content-Type'  => 'application/json',
+						'Authorization' => $private_key,
+					],
+					'body'    => wp_json_encode( [ 'id' => (int) $waybill_id ] ),
+					'timeout' => 20,
+				]
+			);
+
+			$awb_body = is_wp_error( $awb_response )
+				? null
+				: json_decode( wp_remote_retrieve_body( $awb_response ), true );
+
+			if ( is_array( $awb_body ) && empty( $awb_body['type'] ) ) {
+				// Merge so we keep both the order-side fields (customerInfo, items, …)
+				// and the AWB-side fields (shipmentNumber, pdfURL, receiverDueAmount, …).
+				$body = array_merge( $body, $awb_body );
+			} else {
+				$awb_err = is_wp_error( $awb_response )
+					? $awb_response->get_error_message()
+					: ( $awb_body['message'] ?? __( 'Unknown error', 'drusoft-shipping-for-econt' ) );
+				$order->add_order_note( __( 'Econt createAWB warning: ', 'drusoft-shipping-for-econt' ) . $awb_err );
+			}
+
+			$order->update_meta_data( '_drushfe_waybill_id', $waybill_id );
+			$order->update_meta_data( '_drushfe_waybill_response', $body );
+			$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
+			$order->save();
+			return $waybill_id;
+		}
+
+		/**
+		 * Split a Bulgarian shipping address into the structured fields
+		 * Econt's API actually requires.
+		 *
+		 * Econt rejects a free-form `address` value alone with "Нужно е да
+		 * добавите улица и номер или да попълните полетата Квартал и Друго".
+		 * Valid pairs are (`street` + `num`) OR (`quarter` + `other`).
+		 *
+		 * We try to extract a trailing house number from the address string
+		 * (e.g. "ул. Кирил и Методий 3" → street "ул. Кирил и Методий",
+		 * num "3"). House numbers may include a slash or trailing letter
+		 * (`12А`, `7/3`). When no trailing number is found we put the
+		 * whole string into `other` so Econt accepts the second valid pair.
+		 *
+		 * @param string $raw Full shipping line (address_1 + address_2).
+		 * @return array Subset of customerInfo: street/num or other/address.
+		 */
+		private static function build_address_fields( string $raw ): array {
+			$raw = trim( $raw );
+			if ( $raw === '' ) {
+				return [ 'address' => '' ];
+			}
+
+			if ( preg_match( '/^(.+?)\s+(\d[\d\/А-Яа-я\-]*)\s*$/u', $raw, $m ) ) {
+				return [
+					'street'  => trim( $m[1] ),
+					'num'     => trim( $m[2] ),
+					'address' => $raw,
+				];
+			}
+
+			// Couldn't isolate a house number — satisfy the alternative
+			// "quarter + other" requirement by stuffing the raw address into
+			// `other`. `quarter` is left blank; Econt accepts a populated
+			// `other` on its own in practice.
+			return [
+				'other'   => $raw,
+				'address' => $raw,
+			];
 		}
 	}
 }

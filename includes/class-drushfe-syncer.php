@@ -110,7 +110,7 @@ class Drushfe_Syncer {
 		$table_name = $wpdb->prefix . 'drushfe_cities';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "TRUNCATE TABLE {$table_name}" );
+		$wpdb->query( "TRUNCATE TABLE {$wpdb->prefix}drushfe_cities" );
 
 		$count = 0;
 		foreach ( $data['cities'] as $city ) {
@@ -160,7 +160,7 @@ class Drushfe_Syncer {
 		$table_name = $wpdb->prefix . 'drushfe_offices';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( "TRUNCATE TABLE {$table_name}" );
+		$wpdb->query( "TRUNCATE TABLE {$wpdb->prefix}drushfe_offices" );
 
 		$count = 0;
 		foreach ( $data['offices'] as $office ) {
