@@ -2,7 +2,7 @@
 Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 6.9
 Stable tag: 1.0.0
 Requires PHP: 8.0
 License: GPLv2 or later
