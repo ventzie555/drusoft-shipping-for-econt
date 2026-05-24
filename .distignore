@@ -1,7 +1,0 @@
-# Dev/test files — excluded from plugin distribution
-.git
-.gitignore
-.distignore
-tests/
-node_modules/
-
