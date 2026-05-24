@@ -410,10 +410,12 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					],
 				],
 				'sender_time' => [
-					'title'       => __( 'Working Day End Time', 'drusoft-shipping-for-econt' ),
+					'title'       => __( 'Latest Pickup Time', 'drusoft-shipping-for-econt' ),
 					'type'        => 'text',
-					'placeholder' => '17:30',
-					'description' => __( 'Format HH:MM', 'drusoft-shipping-for-econt' ),
+					'placeholder' => '14:00',
+					'default'     => '14:00',
+					'desc_tip'    => true,
+					'description' => __( 'Format HH:MM. Latest time you can hand a shipment to an Econt courier. Econt enforces a per-city cut-off (typically 14:00–14:45) — values past that are rejected with "Изберете кога да ви посети куриер…". If you see that error, lower this value.', 'drusoft-shipping-for-econt' ),
 				],
 
 				// --- SECTION: SHIPMENT SETTINGS ---

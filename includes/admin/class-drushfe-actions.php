@@ -139,10 +139,22 @@ class Drushfe_Actions {
 			wp_send_json_error( __( 'Invalid order ID.', 'drusoft-shipping-for-econt' ) );
 		}
 
-		$order      = wc_get_order( $order_id );
-		$waybill_id = $order ? (string) $order->get_meta( '_drushfe_waybill_id' ) : '';
-		if ( '' === $waybill_id ) {
-			wp_send_json_error( __( 'No waybill found for this order.', 'drusoft-shipping-for-econt' ) );
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			wp_send_json_error( __( 'Order not found.', 'drusoft-shipping-for-econt' ) );
+		}
+
+		// Econt's requestCourier `attachShipments` field expects the 13-digit
+		// AWB shipment number, NOT the internal id from OrdersService.updateOrder.
+		// Without a shipmentNumber, the dispatch system has nothing to attach
+		// the pickup to — Econt returns a courierRequestID but no courier is
+		// actually scheduled (the symptom we saw with empty "Заявка за куриер").
+		// shipmentNumber is populated by OrdersService.createAWB and merged into
+		// _drushfe_waybill_response by the waybill generator.
+		$waybill_response = $order->get_meta( '_drushfe_waybill_response' );
+		$shipment_number  = is_array( $waybill_response ) ? (string) ( $waybill_response['shipmentNumber'] ?? '' ) : '';
+		if ( '' === $shipment_number ) {
+			wp_send_json_error( __( 'This order has no Econt shipment number. Regenerate the waybill so createAWB can issue one, then try again.', 'drusoft-shipping-for-econt' ) );
 		}
 
 		$ctx = self::get_api_context_for_order( $order );
@@ -153,18 +165,31 @@ class Drushfe_Actions {
 
 		// Pickup time window in Europe/Sofia.
 		// Rules:
-		//   - If it's after 16:00, the dispatch cutoff has passed → schedule
-		//     for the next working day at 09:00.
-		//   - Weekends (Sat/Sun) get skipped to Monday.
-		//   - Bulgarian bank holidays are not detected here (we have no holiday
-		//     calendar locally); Econt will reject with "X е почивен ден" and
-		//     the merchant can retry tomorrow. Surfacing that error verbatim is
-		//     handled below.
+		//   - The latest pickup time comes from `sender_time` (default 14:00).
+		//     Econt enforces a per-city cut-off — typically 14:00–14:45 — and
+		//     rejects requests with a later `requestTimeTo` ("Изберете кога да
+		//     ви посети куриер в периода от X ч. до Y ч."). 14:00 is a safe
+		//     floor for the cities we've seen.
+		//   - If the current time is already past the configured cut-off,
+		//     roll forward to the next working day at 09:00.
+		//   - Weekends (Sat/Sun) get skipped here locally.
+		//   - Bulgarian bank holidays are detected by Econt and surfaced as
+		//     "DD.MM.YYYY е почивен ден". We detect that error verbatim and
+		//     auto-retry with the next day (skipping weekends again), up to
+		//     MAX_HOLIDAY_RETRIES times — this delegates the holiday calendar
+		//     to Econt (always current) without maintaining one locally.
+		$end_hhmm  = ! empty( $settings['sender_time'] ) ? $settings['sender_time'] : '14:00';
+		$end_parts = explode( ':', $end_hhmm );
+		$end_hour  = (int) ( $end_parts[0] ?? 14 );
+		$end_min   = (int) ( $end_parts[1] ?? 0 );
+
 		$tz  = new DateTimeZone( 'Europe/Sofia' );
 		$now = new DateTime( 'now', $tz );
 
 		$is_weekend   = in_array( (int) $now->format( 'N' ), [ 6, 7 ], true ); // 6=Sat, 7=Sun
-		$after_cutoff = (int) $now->format( 'H' ) >= 16;
+		$current_mins = (int) $now->format( 'H' ) * 60 + (int) $now->format( 'i' );
+		$cutoff_mins  = $end_hour * 60 + $end_min;
+		$after_cutoff = $current_mins >= $cutoff_mins;
 
 		if ( $is_weekend || $after_cutoff ) {
 			$now->modify( '+1 day' );
@@ -174,28 +199,17 @@ class Drushfe_Actions {
 			$now->setTime( 9, 0 );
 		}
 
-		$end_hhmm  = ! empty( $settings['sender_time'] ) ? $settings['sender_time'] : '17:30';
-		$end_parts = explode( ':', $end_hhmm );
-		$end       = clone $now;
-		$end->setTime( (int) ( $end_parts[0] ?? 17 ), (int) ( $end_parts[1] ?? 30 ) );
-
-		$from = clone $now;
-		if ( $from > $end ) {
-			$from->setTime( 9, 0 );
-		}
-
+		// Build common payload pieces (everything that doesn't depend on date).
 		// Econt's requestCourier wants `Y-m-d H:i:s` strings — NOT ISO 8601
 		// with the `T` separator (the API rejects ATOM with "Невалиден час").
 		// `senderClient.phones` is a flat string array, NOT a `phone` field
 		// nor a `[{number: ...}]` object array.
-		$sender_phone = (string) ( $settings['sender_phone'] ?? '' );
-		$payload = [
-			'requestTimeFrom'   => $from->format( 'Y-m-d H:i:s' ),
-			'requestTimeTo'     => $end->format( 'Y-m-d H:i:s' ),
+		$sender_phone   = (string) ( $settings['sender_phone'] ?? '' );
+		$static_payload = [
 			'shipmentType'      => 'pack',
 			'shipmentPackCount' => 1,
 			'shipmentWeight'    => (float) ( $settings['teglo'] ?? 1 ),
-			'attachShipments'   => [ $waybill_id ],
+			'attachShipments'   => [ $shipment_number ],
 			'senderClient'      => [
 				'name'   => $settings['sender_name'] ?? get_bloginfo( 'name' ),
 				'phones' => $sender_phone !== '' ? [ $sender_phone ] : [],
@@ -211,35 +225,90 @@ class Drushfe_Actions {
 			],
 		];
 
+		// Holiday auto-retry loop. Cap iterations defensively — Bulgaria's
+		// longest consecutive run of non-working days is ~4 (24–26 Dec + 31 Dec
+		// or 1 Jan); 7 leaves headroom while preventing accidental infinite
+		// loops if Econt ever changes the error wording.
 		// ShipmentService lives on ee.econt.com — not delivery.econt.com,
 		// which only hosts OrdersService / PaymentsService / GroupingService.
 		// Use the demo-aware ee_base so test_mode safely targets demo.econt.com.
-		$response = wp_remote_post(
-			$ctx['ee_base'] . 'services/Shipments/ShipmentService.requestCourier.json',
-			[
-				'headers' => $ctx['headers'],
-				'body'    => wp_json_encode( $payload ),
-				'timeout' => 20,
-			]
-		);
+		$max_retries     = 7;
+		$skipped_dates   = [];
+		$body            = null;
+		$already_ordered = false;
 
-		if ( is_wp_error( $response ) ) {
-			wp_send_json_error( $response->get_error_message() );
-		}
+		for ( $attempt = 0; $attempt <= $max_retries; $attempt++ ) {
+			$end = clone $now;
+			$end->setTime( $end_hour, $end_min );
 
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+			$from = clone $now;
+			if ( $from > $end ) {
+				$from->setTime( 9, 0 );
+			}
 
-		// Treat "already ordered" as success.
-		$already_ordered = isset( $body['type'] ) && false !== stripos( (string) $body['type'], 'AlreadyOrdered' );
+			$payload = array_merge(
+				$static_payload,
+				[
+					'requestTimeFrom' => $from->format( 'Y-m-d H:i:s' ),
+					'requestTimeTo'   => $end->format( 'Y-m-d H:i:s' ),
+				]
+			);
 
-		if ( ! empty( $body['type'] ) && ! $already_ordered ) {
-			// Econt nests the real cause under innerErrors when the outer
-			// message is empty/whitespace (e.g. the "phones required" case).
+			$response = wp_remote_post(
+				$ctx['ee_base'] . 'services/Shipments/ShipmentService.requestCourier.json',
+				[
+					'headers' => $ctx['headers'],
+					'body'    => wp_json_encode( $payload ),
+					'timeout' => 20,
+				]
+			);
+
+			if ( is_wp_error( $response ) ) {
+				wp_send_json_error( $response->get_error_message() );
+			}
+
+			$body            = json_decode( wp_remote_retrieve_body( $response ), true );
+			$already_ordered = isset( $body['type'] ) && false !== stripos( (string) $body['type'], 'AlreadyOrdered' );
+
+			// Success path — exit loop.
+			if ( empty( $body['type'] ) || $already_ordered ) {
+				break;
+			}
+
+			// Resolve the human message (Econt nests under innerErrors when
+			// outer message is empty — e.g. the "phones required" case).
 			$err_msg = trim( (string) ( $body['message'] ?? '' ) );
 			if ( '' === $err_msg && ! empty( $body['innerErrors'][0]['message'] ) ) {
 				$err_msg = (string) $body['innerErrors'][0]['message'];
 			}
+
+			// Bulgarian holiday rejection — bump one day and retry.
+			// Econt's wording is "DD.MM.YYYY е почивен ден". Match on the
+			// distinctive phrase, not the date, so locale formatting changes
+			// don't break detection.
+			if ( false !== mb_stripos( $err_msg, 'почивен ден' ) && $attempt < $max_retries ) {
+				$skipped_dates[] = $now->format( 'd.m.Y' );
+				$now->modify( '+1 day' );
+				while ( in_array( (int) $now->format( 'N' ), [ 6, 7 ], true ) ) {
+					$now->modify( '+1 day' );
+				}
+				$now->setTime( 9, 0 );
+				continue;
+			}
+
+			// Any other error — surface to the merchant verbatim and stop.
 			wp_send_json_error( $err_msg !== '' ? $err_msg : __( 'Econt courier request failed.', 'drusoft-shipping-for-econt' ) );
+		}
+
+		// Guard: if the loop fell through without success (max retries hit
+		// on consecutive holidays), surface the last error instead of
+		// treating it as success.
+		if ( ! empty( $body['type'] ) && ! $already_ordered ) {
+			$err_msg = trim( (string) ( $body['message'] ?? '' ) );
+			if ( '' === $err_msg && ! empty( $body['innerErrors'][0]['message'] ) ) {
+				$err_msg = (string) $body['innerErrors'][0]['message'];
+			}
+			wp_send_json_error( $err_msg !== '' ? $err_msg : __( 'Econt courier request failed (no working day found).', 'drusoft-shipping-for-econt' ) );
 		}
 
 		$courier_request_id = $body['courierRequestID'] ?? '';
@@ -255,6 +324,15 @@ class Drushfe_Actions {
 				? sprintf( __( 'Courier requested (Econt ID %s).', 'drusoft-shipping-for-econt' ), $courier_request_id )
 				: __( 'Courier requested.', 'drusoft-shipping-for-econt' )
 		);
+		if ( ! empty( $skipped_dates ) ) {
+			$order->add_order_note(
+				sprintf(
+					/* translators: %s: comma-separated DD.MM.YYYY dates Econt flagged as non-working */
+					__( 'Skipped non-working day(s) per Econt: %s.', 'drusoft-shipping-for-econt' ),
+					implode( ', ', $skipped_dates )
+				)
+			);
+		}
 		if ( '' !== $delayed_warning ) {
 			/* translators: %s: warning text returned by Econt */
 			$order->add_order_note( sprintf( __( 'Econt notice: %s', 'drusoft-shipping-for-econt' ), wp_strip_all_tags( $delayed_warning ) ) );
