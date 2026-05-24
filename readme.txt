@@ -34,6 +34,10 @@ This plugin is currently **not compatible** with the WooCommerce Block Cart and 
 * **Dedicated Econt Orders Page** — Filtered admin list of every Econt order with bulk Generate / Print / Cancel actions.
 * **Bulgarian (bg_BG) Translation Included.**
 
+= Also Ship via Speedy? =
+
+This plugin has a sibling for the **Speedy** courier: [Drusoft Shipping for Speedy](https://wordpress.org/plugins/drusoft-shipping-for-speedy/). Both plugins share the same checkout UI, settings layout, and admin order-management screens — once you've learned one, the other feels familiar. Install both if your store supports delivery via either courier.
+
 == Installation ==
 
 1. Upload the `drusoft-shipping-for-econt` folder to the `/wp-content/plugins/` directory.
