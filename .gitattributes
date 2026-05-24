@@ -1,0 +1,7 @@
+# Files excluded from `git archive` (the wp.org plugin ZIP).
+# `.wordpress-org/` holds the icon / banner / screenshots that get uploaded
+# to wp.org's SVN /assets/ directory — they don't belong inside the plugin
+# users install.
+.wordpress-org/  export-ignore
+.gitignore       export-ignore
+.gitattributes   export-ignore
