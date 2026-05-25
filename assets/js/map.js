@@ -31,9 +31,13 @@
 (function ($) {
     'use strict';
 
-    var LEAFLET_VERSION = '1.9.4';
-    var LEAFLET_CSS = 'https://unpkg.com/leaflet@' + LEAFLET_VERSION + '/dist/leaflet.css';
-    var LEAFLET_JS  = 'https://unpkg.com/leaflet@' + LEAFLET_VERSION + '/dist/leaflet.js';
+    // Leaflet is bundled with the plugin (assets/vendor/leaflet/) and lazy-loaded
+    // from the local plugin directory on first map open — never from a CDN.
+    // These URLs are injected by wp_localize_script(); see drushfe_enqueue_scripts().
+    var CFG            = window.drushfe_map_cfg || {};
+    var LEAFLET_CSS    = CFG.leaflet_css || '';
+    var LEAFLET_JS     = CFG.leaflet_js || '';
+    var LEAFLET_IMAGES = CFG.leaflet_images || '';
 
     var leafletPromise = null;
     var $modal = null;
@@ -55,9 +59,22 @@
      * Load Leaflet CSS + JS once, return a Promise that resolves when window.L
      * is available.
      */
+    // Point Leaflet's default marker icons at the bundled images/ dir so the
+    // markers/shadow load locally instead of via Leaflet's path-guessing.
+    function finish(resolve) {
+        if (window.L && LEAFLET_IMAGES) {
+            window.L.Icon.Default.imagePath = LEAFLET_IMAGES;
+        }
+        resolve(window.L);
+    }
+
     function loadLeaflet() {
         if (leafletPromise) return leafletPromise;
         leafletPromise = new Promise(function (resolve, reject) {
+            if (!LEAFLET_JS || !LEAFLET_CSS) {
+                reject(new Error('Leaflet assets are not configured'));
+                return;
+            }
             if (!document.querySelector('link[data-drushfe-leaflet]')) {
                 var link = document.createElement('link');
                 link.rel = 'stylesheet';
@@ -65,10 +82,10 @@
                 link.setAttribute('data-drushfe-leaflet', '1');
                 document.head.appendChild(link);
             }
-            if (window.L) { resolve(window.L); return; }
+            if (window.L) { finish(resolve); return; }
             var existing = document.querySelector('script[data-drushfe-leaflet]');
             if (existing) {
-                existing.addEventListener('load', function () { resolve(window.L); });
+                existing.addEventListener('load', function () { finish(resolve); });
                 existing.addEventListener('error', function () { reject(new Error('Leaflet failed to load')); });
                 return;
             }
@@ -76,7 +93,7 @@
             script.src = LEAFLET_JS;
             script.async = true;
             script.setAttribute('data-drushfe-leaflet', '1');
-            script.addEventListener('load', function () { resolve(window.L); });
+            script.addEventListener('load', function () { finish(resolve); });
             script.addEventListener('error', function () { reject(new Error('Leaflet failed to load')); });
             document.head.appendChild(script);
         });

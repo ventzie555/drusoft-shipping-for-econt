@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/badge/PHP-8.0+-777bb4.svg)](https://www.php.net/)
 [![License: GPL v2+](https://img.shields.io/badge/License-GPL%20v2%2B-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 
-A high-performance, conflict-free **WooCommerce shipping plugin** for [Econt](https://www.econt.bg/) courier services in **Bulgaria**. Provides real-time shipping rates, two-step waybill generation, office/automat selection, courier pickup requests, and full order management — all through the official Econt API.
+A high-performance, conflict-free **WooCommerce shipping plugin** for [Econt](https://www.econt.com/) courier services in **Bulgaria**. Provides real-time shipping rates, two-step waybill generation, office/automat selection, courier pickup requests, and full order management — all through the official Econt API.
 
 > **⚠️ Compatibility Note:** This plugin requires the classic shortcode-based Cart and Checkout pages (`[woocommerce_cart]` / `[woocommerce_checkout]`). WooCommerce Block Checkout is not yet supported.
 
@@ -54,7 +54,7 @@ Both plugins share the same checkout UI, settings layout, and admin order-manage
 - WordPress 6.0+
 - WooCommerce 8.0+
 - PHP 8.0+
-- Econt API credentials (contact [Econt Bulgaria](https://www.econt.bg/))
+- Econt API credentials (contact [Econt Bulgaria](https://www.econt.com/))
 
 ---
 
@@ -171,7 +171,7 @@ For support or custom feature requests, contact [DRUSOFT LTD](https://drusoft.de
 - WordPress 6.0+
 - WooCommerce 8.0+
 - PHP 8.0+
-- Иконт API данни (свържете се със [Иконт](https://www.econt.bg/))
+- Иконт API данни (свържете се със [Иконт](https://www.econt.com/))
 
 ---
 

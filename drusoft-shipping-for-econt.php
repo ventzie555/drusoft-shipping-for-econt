@@ -257,17 +257,33 @@ function drushfe_get_city_name( int $city_id ): string {
  */
 add_filter( 'woocommerce_cart_shipping_packages', 'drushfe_vary_package_hash' );
 function drushfe_vary_package_hash( $packages ) {
-	// Extract delivery type and office ID from the current checkout POST data
-	// so the package hash changes whenever the user switches delivery type or
-	// picks a different office/automat — forcing WC to re-call calculate_shipping.
-	$post_data = [];
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Called inside WC filter; nonce verified by WooCommerce.
-	if ( ! empty( $_POST['post_data'] ) ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- URL-encoded string; individual values sanitized below.
-		parse_str( wp_unslash( $_POST['post_data'] ), $post_data );
+	// WooCommerce calls this filter both on plain page renders (no POST) and from
+	// within its own nonce-protected cart/checkout AJAX. Only read or act on the
+	// submitted input after verifying one of WooCommerce's own form nonces — this
+	// prevents CSRF-style changes to the customer's session/address on cart
+	// requests. The nonce field/action pairs below match WooCommerce core:
+	// update_order_review (checkout), the shipping calculator, and cart updates.
+	$trusted = (
+		( isset( $_POST['security'] )
+			&& wp_verify_nonce( sanitize_key( wp_unslash( $_POST['security'] ) ), 'update-order-review' ) )
+		|| ( isset( $_POST['woocommerce-shipping-calculator-nonce'] )
+			&& wp_verify_nonce( sanitize_key( wp_unslash( $_POST['woocommerce-shipping-calculator-nonce'] ) ), 'woocommerce-shipping-calculator' ) )
+		|| ( isset( $_POST['woocommerce-cart-nonce'] )
+			&& wp_verify_nonce( sanitize_key( wp_unslash( $_POST['woocommerce-cart-nonce'] ) ), 'woocommerce-cart' ) )
+	);
+
+	// Extract delivery type and office ID from the verified request so the package
+	// hash changes whenever the user switches delivery type or picks a different
+	// office/automat — forcing WC to re-call calculate_shipping(). On unverified
+	// renders $merged stays empty and the defaults below apply.
+	$merged = array();
+	if ( $trusted ) {
+		if ( ! empty( $_POST['post_data'] ) ) {
+			// post_data is a URL-encoded form string; each value is sanitized as it is read below.
+			parse_str( wp_unslash( $_POST['post_data'] ), $merged ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		}
+		$merged = array_merge( $merged, map_deep( wp_unslash( $_POST ), 'sanitize_text_field' ) );
 	}
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing
-	$merged = array_merge( $post_data, $_POST );
 
 	$delivery_type = sanitize_text_field( $merged['econt_delivery_type'] ?? 'address' );
 	$office_id     = absint( $merged['econt_office_id'] ?? 0 );
@@ -286,9 +302,10 @@ function drushfe_vary_package_hash( $packages ) {
 		$city_id = absint( $merged['econt_city_id'] ?? 0 );
 	}
 
-	// On the cart page, set session data directly from the form submission
-	// so calculate_shipping() can read them without a prior AJAX call.
-	if ( WC()->session && $city_id > 0 ) {
+	// On a verified cart/checkout submission, persist the selection to the
+	// session so calculate_shipping() can read it without a prior AJAX call.
+	// Gated on $trusted so an unverified request can never mutate session/customer.
+	if ( $trusted && WC()->session && $city_id > 0 ) {
 		$session_city = absint( WC()->session->get( 'drushfe_city_id', 0 ) );
 		$session_type = WC()->session->get( 'drushfe_delivery_type', 'address' );
 
@@ -494,9 +511,10 @@ function drushfe_enqueue_scripts(): void {
 	);
 
 	if ( is_checkout() ) {
-		// Map module — Leaflet itself is lazy-loaded from CDN on first
-		// "Open Map" click, so this file is tiny (~6KB) and safe to ship
-		// on every checkout render.
+		// Map module. Leaflet is bundled with the plugin (assets/vendor/leaflet/)
+		// and lazy-loaded from the local plugin directory on the first "Open Map"
+		// click — never from a remote CDN — so this file stays tiny (~6KB) and is
+		// safe to ship on every checkout render.
 		wp_enqueue_script(
 			'drushfe-map',
 			DRUSHFE_URL . 'assets/js/map.js',
@@ -505,6 +523,17 @@ function drushfe_enqueue_scripts(): void {
 			array( 'jquery', 'drushfe-common' ),
 			DRUSHFE_VER,
 			true
+		);
+
+		// Local URLs for the bundled Leaflet assets, read by map.js loadLeaflet().
+		wp_localize_script(
+			'drushfe-map',
+			'drushfe_map_cfg',
+			array(
+				'leaflet_css'    => DRUSHFE_URL . 'assets/vendor/leaflet/leaflet.css',
+				'leaflet_js'     => DRUSHFE_URL . 'assets/vendor/leaflet/leaflet.js',
+				'leaflet_images' => DRUSHFE_URL . 'assets/vendor/leaflet/images/',
+			)
 		);
 
 		wp_enqueue_script(

@@ -105,8 +105,8 @@ Data is transmitted only when the corresponding action is triggered (a customer 
 = Service links =
 
 * Econt API documentation (Shipments / Nomenclatures): [https://ee.econt.com/services/](https://ee.econt.com/services/)
-* Econt Terms and Conditions: [https://www.econt.bg/en/general-conditions](https://www.econt.bg/en/general-conditions)
-* Econt Privacy Policy: [https://www.econt.bg/en/privacy-policy](https://www.econt.bg/en/privacy-policy)
+* Econt Terms and Conditions: [https://www.econt.com/en/general-conditions](https://www.econt.com/en/general-conditions)
+* Econt Privacy Policy: [https://www.econt.com/en/privacy-policy](https://www.econt.com/en/privacy-policy)
 
 == Econt API Endpoints ==
 
