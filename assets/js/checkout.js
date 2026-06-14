@@ -43,6 +43,12 @@
         let cachedCityId = '';
         let cachedAvailability = null;
 
+        // Remembered selection across a temporary switch to the sibling courier.
+        // Populated on deactivate, consumed once on the next setup so the user
+        // gets their province / city / delivery-type / office back when they
+        // switch Econt → Speedy → Econt.
+        let savedSelection = null;
+
         // True while we are inside setupEcontUI — prevents update_checkout
         // that our own code triggers from causing a re-entrant loop.
         let settingUp = false;
@@ -325,6 +331,15 @@
 
         // Helper to capture originals
         function captureOriginals(context) {
+            // Never snapshot a courier-built city select (ours or the sibling
+            // Speedy plugin's) as the "stock" field — that would corrupt the
+            // restore. A courier city is always a select2 <select>; the stock
+            // BG city field is a plain text input. Keep the clean snapshot taken
+            // on page load instead.
+            const $city = $('#' + context + '_city');
+            if ($city.is('select') && $city.hasClass('select2-hidden-accessible')) {
+                return;
+            }
             if ($('#' + context + '_city_field').length) {
                 originals[context].cityHtml = $('#' + context + '_city_field').html();
                 originals[context].address1Html = $('#' + context + '_address_1_field').html();
@@ -410,10 +425,13 @@
             }
 
             // Econt is selected — set up / restore UI.
-            // If our select2 city is still in the DOM, WC didn't rebuild — nothing
-            // to do (handler rebind already happened above). Re-place the map
-            // button in case WC's order-review HTML clobbered it.
-            if ($('#' + currentContext + '_city').hasClass('select2-hidden-accessible')) {
+            // Only skip the rebuild if Econt is ALREADY active AND our own city
+            // select is in the DOM (WC refreshed order-review without rebuilding
+            // billing). The isEcontActive guard is essential: after switching away
+            // to Speedy and back, our old drushfe-city select can linger in the
+            // DOM — without the guard we'd mistake it for a live setup, skip
+            // setupEcontUI, and never restore the remembered selection.
+            if (isEcontActive && $('#' + currentContext + '_city').hasClass('drushfe-city')) {
                 placeMapButton();
                 return;
             }
@@ -496,22 +514,48 @@
             isEcontActive = true;
             settingUp = true;
 
+            // Tell the sibling Speedy plugin that Econt now owns the layout, so
+            // its deactivate (which runs after ours when switching) won't restore
+            // the stock field order on top of ours.
+            window.__drushfActiveCourier = 'econt';
+
             reorderFieldsForEcont();
             initStateSelect2WithTransliteration();
             makeRegionRequired();
 
-            // Determine state: session > DOM
-            const effectiveState = params.current_state || $('#' + currentContext + '_state').val();
-
-            if (params.current_state) {
-                const $stateEl = $('#' + currentContext + '_state');
-                if ($stateEl.val() !== params.current_state) {
-                    $stateEl.val(params.current_state).trigger('change.select2');
-                }
+            // Restore THIS courier's own remembered selection. Province and city
+            // come ONLY from our own memory (savedSelection) or the server
+            // session — NEVER from the current DOM value, which belongs to the
+            // sibling courier. Speedy and Econt keep fully separate data: picking
+            // a county under Speedy must not pre-fill it under Econt.
+            let restoredState = '';
+            if (savedSelection) {
+                if (savedSelection.deliveryType) lastDeliveryType = savedSelection.deliveryType;
+                if (savedSelection.officeId) lastOfficeId = savedSelection.officeId;
+                if (savedSelection.cityId) cachedCityId = savedSelection.cityId;
+                restoredState = savedSelection.state || '';
+                savedSelection = null;
             }
 
-            // City to pre-select: session (numeric ID) > DOM text value
-            const preSelectCity = cachedCityId || params.current_city_id || $('#' + currentContext + '_city').val();
+            // WC uses '*' as a "no state" sentinel for guests — treat it as empty.
+            const sessionState = (params.current_state && params.current_state !== '*') ? params.current_state : '';
+            const effectiveState = restoredState || sessionState;
+
+            // Apply (or CLEAR) the shared state field to match our own data, so we
+            // never inherit the sibling courier's leftover province.
+            const $stateEl = $('#' + currentContext + '_state');
+            if (($stateEl.val() || '') !== effectiveState) {
+                $stateEl.val(effectiveState).trigger('change.select2');
+            }
+
+            // Postcode is a shared field too — clear it so we don't inherit the
+            // sibling courier's. The restore chain below re-fills it from our own
+            // pre-selected city/office.
+            $('#' + currentContext + '_postcode').val('');
+
+            // City to pre-select comes only from our own cache/session — not the
+            // DOM value, which would be the sibling courier's city.
+            const preSelectCity = cachedCityId || params.current_city_id;
 
             if (!effectiveState) {
                 $('#' + currentContext + '_city_field').hide();
@@ -673,12 +717,45 @@
         function deactivateEcont() {
             isEcontActive = false;
 
+            // Snapshot the current selection BEFORE we tear the fields down, so
+            // we can restore it if the user switches back to Econt. Captured
+            // separately from the load-bearing resets below — those must still
+            // run for a clean teardown.
+            // Read from OUR private caches FIRST, not the shared DOM fields. The
+            // sibling courier's updated_checkout handler runs before our deactivate
+            // and may have already written ITS province/city into #billing_state /
+            // #billing_city — reading the DOM here would capture the sibling's data
+            // as ours. cachedState / cachedCityId hold only THIS courier's values.
+            const $remCity = $('#' + currentContext + '_city');
+            const domCity = ($remCity.is('select') && $remCity.hasClass('drushfe-city')) ? $remCity.val() : '';
+            const remState = cachedState || $('#' + currentContext + '_state').val();
+            const remCity = cachedCityId || domCity;
+            if (remState || remCity || lastDeliveryType !== 'address' || lastOfficeId) {
+                savedSelection = {
+                    state: remState || '',
+                    cityId: remCity || '',
+                    deliveryType: lastDeliveryType,
+                    officeId: lastOfficeId
+                };
+            }
+
             setWcAutocompleteProvider(false);
 
             $('#billing_state, #shipping_state').off('change.econt');
-            restoreOriginalFields();
-            restoreFieldOrder();
-            
+
+            // If the sibling Speedy plugin is the courier now taking over, it has
+            // already (synchronously) re-laid-out the billing fields for itself.
+            // Running the full stock-field restore here would clobber Speedy's
+            // field order and re-show the address field. In that case only remove
+            // OUR injected UI. Otherwise (switching to a non-courier method) do
+            // the full restore so the stock checkout returns to normal.
+            if (window.__drushfActiveCourier === 'speedy') {
+                $('#econt-delivery-type-field, #econt-office-field, #econt-map-button-wrapper, #econt-service-field').remove();
+            } else {
+                restoreOriginalFields();
+                restoreFieldOrder();
+            }
+
             lastDeliveryType = 'address';
             lastOfficeId = '';
             sessionStorage.removeItem('econt_delivery_type');
@@ -747,8 +824,12 @@
         function restoreOriginalFields() {
             const $cityInput = $('#' + currentContext + '_city');
             const $cityField = $('#' + currentContext + '_city_field');
-            
-            if ($cityInput.is('select')) {
+
+            // Only restore the city if WE own it. If the sibling Speedy plugin
+            // has already taken over the field (its own select), leave it alone —
+            // tearing it down here would blank out the courier the user just
+            // switched to.
+            if ($cityInput.is('select') && $cityInput.hasClass('drushfe-city')) {
                 if ($cityInput.data('select2')) {
                     $cityInput.select2('destroy');
                 }
@@ -825,7 +906,7 @@
                 options += '<option value="' + city.id + '" data-postcode="' + (city.postcode || '') + '" ' + selected + '>' + city.name + ' ' + (city.postcode ? '(' + city.postcode + ')' : '') + '</option>';
             });
 
-            const selectHtml = '<select name="' + currentContext + '_city" id="' + currentContext + '_city" class="select2-hidden-accessible" data-placeholder="' + params.i18n.select_city + '">' + options + '</select>';
+            const selectHtml = '<select name="' + currentContext + '_city" id="' + currentContext + '_city" class="select2-hidden-accessible drushfe-city" data-placeholder="' + params.i18n.select_city + '">' + options + '</select>';
             
             $cityWrapper.html(selectHtml);
 
@@ -912,7 +993,7 @@
             radios += '</span>';
 
             const radioHtml = '<p class="form-row form-row-wide" id="econt-delivery-type-field">' +
-                '<label>Delivery Method</label>' + radios + '</p>';
+                '<label>' + params.i18n.delivery_method + '</label>' + radios + '</p>';
 
             $('#' + currentContext + '_city_field').after(radioHtml);
 
