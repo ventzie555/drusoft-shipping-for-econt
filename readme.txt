@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -145,6 +145,12 @@ The plugin minimizes API calls through several strategies:
 
 == Changelog ==
 
+= 1.0.1 =
+* Fixed: when both Drusoft Shipping for Econt and Drusoft Shipping for Speedy are active, switching couriers during checkout could leave the newly selected courier's picker uninitialised. Both plugins tagged their city dropdown with the same generic Select2 class; each now marks its own.
+* Fixed: each courier keeps its own delivery selection (province, city, office, delivery type, postcode). A value entered under one courier no longer carries over to the other through the shared address fields.
+* Fixed: corrected the Bulgarian translation of the courier name ("Иконт" → "Еконт") throughout the plugin.
+* i18n: the "Delivery Method" field label is now translatable.
+
 = 1.0.0 =
 * Initial release.
 * WooCommerce shipping method for Econt (`drushfe_econt`) with per-zone instance settings.
@@ -160,6 +166,9 @@ The plugin minimizes API calls through several strategies:
 * Bulgarian (bg_BG) translation included.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Recommended update. Fixes courier-switch issues when used alongside Drusoft Shipping for Speedy, keeps each courier's checkout selection separate, and corrects the Bulgarian courier name.
 
 = 1.0.0 =
 Initial release.
