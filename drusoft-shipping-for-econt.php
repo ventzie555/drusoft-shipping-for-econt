@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.2
+ * Version:     1.0.3
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '1.0.2' );
+define( 'DRUSHFE_VER',  '1.0.3' );
 
 /**
  * Load Dependencies
@@ -754,19 +754,92 @@ function drushfe_admin_show_office( $order ): void {
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	$office = $wpdb->get_row(
 		$wpdb->prepare(
-			"SELECT name, address FROM {$wpdb->prefix}drushfe_offices WHERE id = %d",
+			"SELECT name, address, office_type FROM {$wpdb->prefix}drushfe_offices WHERE id = %d",
 			$office_id
 		)
 	);
+
+	// Label automats (APS) distinctly from regular offices.
+	$is_automat = $office && drushfe_is_automat( (string) $office->office_type, (string) $office->name );
+	$label      = $is_automat
+		? __( 'Econt automat', 'drusoft-shipping-for-econt' )
+		: __( 'Econt office', 'drusoft-shipping-for-econt' );
 
 	$value = $office
 		? sprintf( '%s — %s', $office->name, $office->address )
 		: __( 'Office not found in local database — please sync offices.', 'drusoft-shipping-for-econt' );
 
 	echo '<p class="form-field form-field-wide"><strong>' .
-		esc_html__( 'Econt office', 'drusoft-shipping-for-econt' ) . ':</strong><br>' .
+		esc_html( $label ) . ':</strong><br>' .
 		esc_html( $value ) .
 		' <span style="color:#888">(#' . esc_html( (string) $office_id ) . ')</span></p>';
+}
+
+/**
+ * Resolve the customer-facing Econt parcel-tracking info for an order.
+ *
+ * @param WC_Order $order The order.
+ * @return array{waybill:string,url:string}|null Null when there is no Econt waybill yet.
+ */
+function drushfe_get_tracking_info( $order ): ?array {
+	if ( ! is_a( $order, 'WC_Order' ) ) {
+		return null;
+	}
+	$waybill = (string) $order->get_meta( '_drushfe_waybill_id' );
+	if ( '' === $waybill ) {
+		return null; // not shipped yet / not an Econt waybill
+	}
+	return array(
+		'waybill' => $waybill,
+		'url'     => 'https://www.econt.com/services/track-shipment/' . rawurlencode( $waybill ),
+	);
+}
+
+/**
+ * Show the Econt parcel-tracking link to the customer on the order details
+ * (order-received page, My Account → order, and the order-tracking page).
+ *
+ * @param WC_Order $order The order.
+ */
+add_action( 'woocommerce_order_details_after_order_table', 'drushfe_order_details_tracking' );
+function drushfe_order_details_tracking( $order ): void {
+	$t = drushfe_get_tracking_info( $order );
+	if ( ! $t ) {
+		return;
+	}
+	echo '<section class="drushfe-tracking" style="margin:0 0 24px">';
+	echo '<h2>' . esc_html__( 'Parcel tracking', 'drusoft-shipping-for-econt' ) . '</h2>';
+	echo '<p>' . esc_html__( 'Waybill number', 'drusoft-shipping-for-econt' ) . ': <strong>' . esc_html( $t['waybill'] ) . '</strong><br>';
+	echo '<a href="' . esc_url( $t['url'] ) . '" target="_blank" rel="noopener">' . esc_html__( 'Track your parcel with Econt', 'drusoft-shipping-for-econt' ) . '</a></p>';
+	echo '</section>';
+}
+
+/**
+ * Append the Econt tracking link to customer order emails (skips admin copies).
+ * Appears once the waybill exists — e.g. on the completed-order email.
+ *
+ * @param WC_Order $order         The order.
+ * @param bool     $sent_to_admin Whether this email is the admin copy.
+ * @param bool     $plain_text    Whether this is the plain-text email.
+ */
+add_action( 'woocommerce_email_after_order_table', 'drushfe_email_tracking', 10, 3 );
+function drushfe_email_tracking( $order, $sent_to_admin = false, $plain_text = false ): void {
+	if ( $sent_to_admin ) {
+		return;
+	}
+	$t = drushfe_get_tracking_info( $order );
+	if ( ! $t ) {
+		return;
+	}
+	if ( $plain_text ) {
+		echo "\n" . esc_html__( 'Parcel tracking', 'drusoft-shipping-for-econt' ) . ' (' . esc_html__( 'Econt', 'drusoft-shipping-for-econt' ) . "):\n";
+		echo esc_html__( 'Waybill number', 'drusoft-shipping-for-econt' ) . ': ' . esc_html( $t['waybill'] ) . "\n";
+		echo esc_url( $t['url'] ) . "\n";
+	} else {
+		echo '<h2>' . esc_html__( 'Parcel tracking', 'drusoft-shipping-for-econt' ) . '</h2>';
+		echo '<p>' . esc_html__( 'Waybill number', 'drusoft-shipping-for-econt' ) . ': <strong>' . esc_html( $t['waybill'] ) . '</strong><br>';
+		echo '<a href="' . esc_url( $t['url'] ) . '">' . esc_html__( 'Track your parcel with Econt', 'drusoft-shipping-for-econt' ) . '</a></p>';
+	}
 }
 
 /**

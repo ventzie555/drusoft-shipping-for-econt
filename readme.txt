@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,10 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.3 =
+* Improved: customers now see the Econt parcel-tracking link (waybill number + a link to econt.com) on the order-received page, in My Account, on the order-tracking page, and in their order emails — shown once the waybill is generated.
+* Improved: orders delivered to an Econt automat (APS) are now labelled "Econt automat" instead of "Econt office" on the order admin screen.
 
 = 1.0.2 =
 * Improved: the selected Econt office (name and address) is now shown directly on the WooCommerce order screen, in the shipping-address column. Previously only the internal office ID was stored, so merchants had to generate a waybill to see which office the customer chose. Resolved at display time, so it also applies to orders placed before this version.

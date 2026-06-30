@@ -722,3 +722,18 @@ msgstr "Офис на Еконт"
 
 msgid "Office not found in local database — please sync offices."
 msgstr "Офисът не е намерен в локалната база — моля, синхронизирайте офисите."
+
+msgid "Econt automat"
+msgstr "Автомат на Еконт"
+
+msgid "Parcel tracking"
+msgstr "Проследяване на пратката"
+
+msgid "Waybill number"
+msgstr "Номер на товарителница"
+
+msgid "Track your parcel with Econt"
+msgstr "Проследи пратката при Еконт"
+
+msgid "Econt"
+msgstr "Еконт"
