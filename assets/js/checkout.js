@@ -374,6 +374,22 @@
             }
         }, true);
 
+        // Keyboard and programmatic switches never fire mousedown (arrow keys on
+        // the radio group, assistive tech, scripts). Without this, our city select
+        // lingered in the DOM after such a switch and the sibling courier's
+        // takeover captured it as the "original" field — leaving a stale city list
+        // (with OUR city ids) live under the other courier. Mirror the cleanup on
+        // 'change' in CAPTURE phase so it still runs before other handlers.
+        document.addEventListener('change', function(e) {
+            const radio = e.target.closest('input[name^="shipping_method"]');
+            if (!radio || !radio.checked) return;
+
+            const isEcont = radio.value && radio.value.indexOf(econtMethodId) !== -1;
+            if (!isEcont && isEcontActive) {
+                deactivateEcont();
+            }
+        }, true);
+
         // Capture state BEFORE WC destroys the DOM
         $(document.body).on('update_checkout', function() {
             if (isEcontActive && !settingUp) {
