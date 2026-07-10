@@ -128,106 +128,141 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				'paymentToken'        => '',
 			];
 
-			$items_desc = [];
-			foreach ( $order->get_items( 'line_item' ) as $item ) {
-				$product = $item->get_product();
-				if ( ! $product ) {
+			// Split shipments: one Достави с Еконт order per pickup group,
+			// each authorized with that group's store key. The normal path is
+			// a single group covering all items with the default key.
+			$split_groups = $order->get_meta( '_drushfe_split_groups' );
+			$is_split     = is_array( $split_groups ) && count( $split_groups ) > 1;
+			$group_defs   = $is_split ? $split_groups : [ '' => null ];
+
+			$method = ( $is_split && class_exists( 'Drushfe_Shipping_Method' ) )
+				? new Drushfe_Shipping_Method( $instance_id )
+				: null;
+
+			$first_waybill_id = null;
+			$waybill_ids      = [];
+			$parcel_no        = 0;
+
+			foreach ( $group_defs as $g_key => $g_ids ) {
+				$parcel_no++;
+				$g_payload  = $payload;
+				$items_desc = [];
+				foreach ( $order->get_items( 'line_item' ) as $item ) {
+					$product = $item->get_product();
+					if ( ! $product ) {
+						continue;
+					}
+					$pid = (int) ( $item->get_variation_id() ?: $item->get_product_id() );
+					if ( null !== $g_ids && ! in_array( $pid, (array) $g_ids, true ) ) {
+						continue;
+					}
+
+					$qty    = (int) $item->get_quantity();
+					$price  = (float) ( $item->get_total() + $item->get_total_tax() );
+					$weight = (float) $product->get_weight();
+					if ( $weight <= 0 ) {
+						$weight = (float) ( $settings['teglo'] ?? 0.5 );
+					}
+
+					$name = $product->get_name();
+					$g_payload['items'][] = [
+						'name'        => $name,
+						'SKU'         => $product->get_sku(),
+						'URL'         => '',
+						'count'       => $qty,
+						'hideCount'   => '',
+						'totalPrice'  => $price,
+						'totalWeight' => $weight * $qty,
+					];
+					$items_desc[] = $name;
+				}
+				$g_payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
+				if ( $is_split ) {
+					// each store needs its own unique order number
+					$g_payload['orderNumber'] = $order_id . '-' . $parcel_no;
+				}
+
+				$g_auth = ( null !== $g_ids && $method )
+					? $method->pickup_private_key( (string) $g_key )
+					: $private_key;
+
+				$response = wp_remote_post(
+					$base_url . 'services/OrdersService.updateOrder.json',
+					[
+						'headers' => [
+							'Content-Type'  => 'application/json',
+							'Authorization' => $g_auth,
+						],
+						'body'    => wp_json_encode( $g_payload ),
+						'timeout' => 20,
+					]
+				);
+
+				$body = is_wp_error( $response ) ? null : json_decode( wp_remote_retrieve_body( $response ), true );
+				if ( is_wp_error( $response ) || ! empty( $body['type'] ) || empty( $body['id'] ) ) {
+					$msg = is_wp_error( $response )
+						? $response->get_error_message()
+						: ( $body['message'] ?? __( 'Unknown API error', 'drusoft-shipping-for-econt' ) );
+					if ( 1 === $parcel_no ) {
+						$order->add_order_note( __( 'Econt Waybill Error: ', 'drusoft-shipping-for-econt' ) . $msg );
+						return is_wp_error( $response ) ? $response : new WP_Error( 'api_error', $msg );
+					}
+					/* translators: 1: parcel number, 2: error message */
+					$order->add_order_note( sprintf( __( 'Econt Waybill Error (parcel %1$d): %2$s — create it manually.', 'drusoft-shipping-for-econt' ), $parcel_no, $msg ) );
 					continue;
 				}
 
-				$qty    = (int) $item->get_quantity();
-				$price  = (float) ( $item->get_total() + $item->get_total_tax() );
-				$weight = (float) $product->get_weight();
-				if ( $weight <= 0 ) {
-					$weight = (float) ( $settings['teglo'] ?? 0.5 );
+				$waybill_id = (string) $body['id'];
+
+				// Econt's flow is two-step:
+				//   1. OrdersService.updateOrder  — saves the order draft, returns id.
+				//   2. OrdersService.createAWB    — promotes to an Air Waybill,
+				//                                   returns shipmentNumber + pdfURL.
+				$awb_response = wp_remote_post(
+					$base_url . 'services/OrdersService.createAWB.json',
+					[
+						'headers' => [
+							'Content-Type'  => 'application/json',
+							'Authorization' => $g_auth,
+						],
+						'body'    => wp_json_encode( [ 'id' => (int) $waybill_id ] ),
+						'timeout' => 20,
+					]
+				);
+
+				$awb_body = is_wp_error( $awb_response )
+					? null
+					: json_decode( wp_remote_retrieve_body( $awb_response ), true );
+
+				if ( is_array( $awb_body ) && empty( $awb_body['type'] ) ) {
+					$body = array_merge( $body, $awb_body );
+				} else {
+					$awb_err = is_wp_error( $awb_response )
+						? $awb_response->get_error_message()
+						: ( $awb_body['message'] ?? __( 'Unknown error', 'drusoft-shipping-for-econt' ) );
+					$order->add_order_note( __( 'Econt createAWB warning: ', 'drusoft-shipping-for-econt' ) . $awb_err );
 				}
 
-				$name = $product->get_name();
-				$payload['items'][] = [
-					'name'        => $name,
-					'SKU'         => $product->get_sku(),
-					'URL'         => '',
-					'count'       => $qty,
-					'hideCount'   => '',
-					'totalPrice'  => $price,
-					'totalWeight' => $weight * $qty,
-				];
-				$items_desc[] = $name;
-			}
-			$payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
-
-			$response = wp_remote_post(
-				$base_url . 'services/OrdersService.updateOrder.json',
-				[
-					'headers' => [
-						'Content-Type'  => 'application/json',
-						'Authorization' => $private_key,
-					],
-					'body'    => wp_json_encode( $payload ),
-					'timeout' => 20,
-				]
-			);
-
-			if ( is_wp_error( $response ) ) {
-				$order->add_order_note( __( 'Econt Waybill Error: ', 'drusoft-shipping-for-econt' ) . $response->get_error_message() );
-				return $response;
+				$waybill_ids[] = $waybill_id;
+				if ( 1 === $parcel_no ) {
+					$first_waybill_id = $waybill_id;
+					$order->update_meta_data( '_drushfe_waybill_id', $waybill_id );
+					$order->update_meta_data( '_drushfe_waybill_response', $body );
+					$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
+				} else {
+					/* translators: 1: parcel number, 2: waybill id */
+					$order->add_order_note( sprintf( __( 'Econt Waybill Created (parcel %1$d): %2$s', 'drusoft-shipping-for-econt' ), $parcel_no, $waybill_id ) );
+				}
 			}
 
-			$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-			// Econt signals errors via a non-empty `type` field rather than `error`.
-			if ( ! empty( $body['type'] ) ) {
-				$msg = $body['message'] ?? __( 'Unknown API error', 'drusoft-shipping-for-econt' );
-				$order->add_order_note( __( 'Econt Waybill Error: ', 'drusoft-shipping-for-econt' ) . $msg );
-				return new WP_Error( 'api_error', $msg );
-			}
-
-			if ( empty( $body['id'] ) ) {
+			if ( null === $first_waybill_id ) {
 				return new WP_Error( 'unexpected_response', __( 'Unexpected response from Econt API.', 'drusoft-shipping-for-econt' ) );
 			}
-
-			$waybill_id = (string) $body['id'];
-
-			// Econt's flow is two-step:
-			//   1. OrdersService.updateOrder  — saves the order draft, returns id.
-			//   2. OrdersService.createAWB    — promotes to an Air Waybill,
-			//                                   returns the full ShipmentStatus
-			//                                   incl. shipmentNumber + pdfURL.
-			// Without step 2 we have no PDF URL to print and no shipmentNumber
-			// to cancel against, so do it now and merge the result back into
-			// `_drushfe_waybill_response`.
-			$awb_response = wp_remote_post(
-				$base_url . 'services/OrdersService.createAWB.json',
-				[
-					'headers' => [
-						'Content-Type'  => 'application/json',
-						'Authorization' => $private_key,
-					],
-					'body'    => wp_json_encode( [ 'id' => (int) $waybill_id ] ),
-					'timeout' => 20,
-				]
-			);
-
-			$awb_body = is_wp_error( $awb_response )
-				? null
-				: json_decode( wp_remote_retrieve_body( $awb_response ), true );
-
-			if ( is_array( $awb_body ) && empty( $awb_body['type'] ) ) {
-				// Merge so we keep both the order-side fields (customerInfo, items, …)
-				// and the AWB-side fields (shipmentNumber, pdfURL, receiverDueAmount, …).
-				$body = array_merge( $body, $awb_body );
-			} else {
-				$awb_err = is_wp_error( $awb_response )
-					? $awb_response->get_error_message()
-					: ( $awb_body['message'] ?? __( 'Unknown error', 'drusoft-shipping-for-econt' ) );
-				$order->add_order_note( __( 'Econt createAWB warning: ', 'drusoft-shipping-for-econt' ) . $awb_err );
+			if ( count( $waybill_ids ) > 1 ) {
+				$order->update_meta_data( '_drushfe_waybill_ids', $waybill_ids );
 			}
-
-			$order->update_meta_data( '_drushfe_waybill_id', $waybill_id );
-			$order->update_meta_data( '_drushfe_waybill_response', $body );
-			$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
 			$order->save();
-			return $waybill_id;
+			return $first_waybill_id;
 		}
 
 		/**

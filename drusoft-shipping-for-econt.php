@@ -1031,6 +1031,13 @@ function drushfe_admin_pickup_selector( $order ): void {
 	if ( $order->get_meta( '_drushfe_waybill_id' ) ) {
 		return; // waybill already generated — origin is fixed
 	}
+	if ( $split = (int) $order->get_meta( '_drushfe_pickup_split' ) ) {
+		echo '<p class="form-field form-field-wide" style="color:#2271b1;font-weight:600;">'
+			/* translators: %d: number of parcels */
+			. esc_html( sprintf( __( 'Split shipment: %d parcels, one per pickup point (see order notes).', 'drusoft-shipping-for-econt' ), $split ) )
+			. '</p>';
+		return;
+	}
 	if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 		return;
 	}
@@ -1690,6 +1697,8 @@ function drushfe_calculate_price_ajax(): void {
 
 	// Multi-origin: price against the cart's resolved pickup store, so the
 	// quoted origin always matches the store the waybill will ship from.
+	$mo_split_groups = [];
+	$mo_method       = null;
 	$mo_instance = function_exists( 'drushfe_get_first_instance_id' ) ? drushfe_get_first_instance_id() : 0;
 	if ( $mo_instance && class_exists( 'Drushfe_Shipping_Method' ) ) {
 		$cart_ids = [];
@@ -1697,9 +1706,17 @@ function drushfe_calculate_price_ajax(): void {
 			$cart_ids[] = (int) ( $cart_item['variation_id'] ?: $cart_item['product_id'] );
 		}
 		$mo_method = new Drushfe_Shipping_Method( $mo_instance );
-		$mo_key    = $mo_method->resolve_pickup_profile_key( $cart_ids );
-		if ( 'default' !== $mo_key ) {
-			$private_key = $mo_method->pickup_private_key( $mo_key );
+		if ( 'split' === $mo_method->pickup_opt( 'pickup_mixed_policy', 'consolidate' ) ) {
+			$groups = $mo_method->split_cart_groups();
+			if ( count( $groups ) > 1 ) {
+				$mo_split_groups = $groups;
+			}
+		}
+		if ( ! $mo_split_groups ) {
+			$mo_key = $mo_method->resolve_pickup_profile_key( $cart_ids );
+			if ( 'default' !== $mo_key ) {
+				$private_key = $mo_method->pickup_private_key( $mo_key );
+			}
 		}
 	}
 
@@ -1778,57 +1795,75 @@ function drushfe_calculate_price_ajax(): void {
 		$payload['customerInfo']['officeCode'] = $resolved_office;
 	}
 
-	$items_desc = [];
-	foreach ( WC()->cart->get_cart() as $cart_item ) {
-		$product = $cart_item['data'];
-		$qty     = (int) $cart_item['quantity'];
-		$price   = (float) ( $cart_item['line_total'] + $cart_item['line_tax'] );
-		$weight  = (float) $product->get_weight();
-		if ( $weight <= 0 ) {
-			$weight = (float) ( $settings['teglo'] ?? 0.5 );
+	// Split shipments quote one parcel per pickup group and sum; the normal
+	// path is a single "group" covering the whole cart.
+	$group_defs = $mo_split_groups
+		? array_map( static fn( $g ) => $g['ids'], $mo_split_groups )
+		: [ '' => null ];
+
+	$price = 0.0;
+	foreach ( $group_defs as $g_key => $g_ids ) {
+		$g_payload  = $payload;
+		$items_desc = [];
+		foreach ( WC()->cart->get_cart() as $cart_item ) {
+			$pid = (int) ( $cart_item['variation_id'] ?: $cart_item['product_id'] );
+			if ( null !== $g_ids && ! in_array( $pid, (array) $g_ids, true ) ) {
+				continue;
+			}
+			$product = $cart_item['data'];
+			$qty     = (int) $cart_item['quantity'];
+			$g_price = (float) ( $cart_item['line_total'] + $cart_item['line_tax'] );
+			$weight  = (float) $product->get_weight();
+			if ( $weight <= 0 ) {
+				$weight = (float) ( $settings['teglo'] ?? 0.5 );
+			}
+			$name = $product->get_name();
+
+			$g_payload['items'][] = [
+				'name'        => $name,
+				'SKU'         => $product->get_sku(),
+				'URL'         => '',
+				'count'       => $qty,
+				'hideCount'   => '',
+				'totalPrice'  => $g_price,
+				'totalWeight' => $weight * $qty,
+			];
+			$items_desc[] = $name;
 		}
-		$name = $product->get_name();
+		$g_payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
 
-		$payload['items'][] = [
-			'name'        => $name,
-			'SKU'         => $product->get_sku(),
-			'URL'         => '',
-			'count'       => $qty,
-			'hideCount'   => '',
-			'totalPrice'  => $price,
-			'totalWeight' => $weight * $qty,
-		];
-		$items_desc[] = $name;
+		$g_auth = ( null !== $g_ids && $mo_method )
+			? $mo_method->pickup_private_key( (string) $g_key )
+			: $private_key;
+
+		$response = wp_remote_post(
+			$base_url . 'services/OrdersService.getPrice.json',
+			[
+				'headers' => [
+					'Content-Type'  => 'application/json',
+					'Authorization' => $g_auth,
+				],
+				'body'    => wp_json_encode( $g_payload ),
+				'timeout' => 15,
+			]
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( $response->get_error_message() );
+		}
+
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+		if ( ! empty( $body['type'] ) ) {
+			wp_send_json_error( $body['message'] ?? __( 'Pricing failed', 'drusoft-shipping-for-econt' ) );
+		}
+
+		if ( ! isset( $body['receiverDueAmount'] ) ) {
+			wp_send_json_error( __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
+		}
+
+		$price += (float) $body['receiverDueAmount'];
 	}
-	$payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
-
-	$response = wp_remote_post(
-		$base_url . 'services/OrdersService.getPrice.json',
-		[
-			'headers' => [
-				'Content-Type'  => 'application/json',
-				'Authorization' => $private_key,
-			],
-			'body'    => wp_json_encode( $payload ),
-			'timeout' => 15,
-		]
-	);
-
-	if ( is_wp_error( $response ) ) {
-		wp_send_json_error( $response->get_error_message() );
-	}
-
-	$body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-	if ( ! empty( $body['type'] ) ) {
-		wp_send_json_error( $body['message'] ?? __( 'Pricing failed', 'drusoft-shipping-for-econt' ) );
-	}
-
-	if ( ! isset( $body['receiverDueAmount'] ) ) {
-		wp_send_json_error( __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
-	}
-
-	$price = (float) $body['receiverDueAmount'];
 
 	// Race guard: only overwrite the session price if this response is for the
 	// latest selection flow_version. Older responses arriving late are ignored.
@@ -1839,6 +1874,7 @@ function drushfe_calculate_price_ajax(): void {
 	if ( ! $current_version || $flow_version >= $current_version ) {
 		$session->set( 'drushfe_flow_version', $flow_version );
 		$session->set( 'drushfe_shipping_cost', $price );
+		$session->set( 'drushfe_split_count', $mo_split_groups ? count( $group_defs ) : 0 );
 	}
 
 	$packages = WC()->cart->get_shipping_packages();

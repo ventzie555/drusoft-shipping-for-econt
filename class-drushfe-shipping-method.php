@@ -109,7 +109,18 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			foreach ( $order->get_items() as $item ) {
 				$order_product_ids[] = (int) ( $item->get_variation_id() ?: $item->get_product_id() );
 			}
-			$order->update_meta_data( '_drushfe_pickup_profile', $resolver->resolve_pickup_profile_key( $order_product_ids ) );
+			$mo_groups = 'split' === $resolver->pickup_opt( 'pickup_mixed_policy', 'consolidate' )
+				? $resolver->split_cart_groups()
+				: [];
+			if ( count( $mo_groups ) > 1 ) {
+				// Split shipment: one Достави с Еконт order per group; the
+				// waybill generator loops these — no single profile applies.
+				$order->update_meta_data( '_drushfe_pickup_profile', '' );
+				$order->update_meta_data( '_drushfe_pickup_split', count( $mo_groups ) );
+				$order->update_meta_data( '_drushfe_split_groups', array_map( static fn( $g ) => $g['ids'], $mo_groups ) );
+			} else {
+				$order->update_meta_data( '_drushfe_pickup_profile', $resolver->resolve_pickup_profile_key( $order_product_ids ) );
+			}
 
 			// Mixed basket (items assigned to different pickup points): the
 			// order ships CONSOLIDATED from the resolved origin — flag it and
@@ -238,9 +249,10 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			}
 			$order->delete_meta_data( '_drushfe_pickup_note' );
 			$order->save();
-			$order->add_order_note(
-				__( 'Mixed pickup points — consolidate before shipping:', 'drusoft-shipping-for-econt' ) . "\n" . $lines
-			);
+			$intro = $order->get_meta( '_drushfe_pickup_split' )
+				? __( 'Mixed pickup points — ships as separate parcels:', 'drusoft-shipping-for-econt' )
+				: __( 'Mixed pickup points — consolidate before shipping:', 'drusoft-shipping-for-econt' );
+			$order->add_order_note( $intro . "\n" . $lines );
 		}
 
 		/**
@@ -519,7 +531,17 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 						static fn( $p ) => $p['label'],
 						$this->get_pickup_profiles()
 					),
-					'description' => __( 'Used for products without an explicit pickup-point assignment. Mixed baskets consolidate through this point.', 'drusoft-shipping-for-econt' ),
+					'description' => __( 'Used for products without an explicit pickup-point assignment.', 'drusoft-shipping-for-econt' ),
+				],
+				'pickup_mixed_policy' => [
+					'title'       => __( 'Mixed-basket Handling', 'drusoft-shipping-for-econt' ),
+					'type'        => 'select',
+					'default'     => 'consolidate',
+					'options'     => [
+						'consolidate' => __( 'Consolidate — one parcel from the default pickup point', 'drusoft-shipping-for-econt' ),
+						'split'       => __( 'Split — one parcel per pickup point (summed price, COD per parcel)', 'drusoft-shipping-for-econt' ),
+					],
+					'description' => __( 'What happens when basket items are assigned to different pickup points. Split keeps one courier and delivery point; the customer sees the parcel count and the summed delivery price.', 'drusoft-shipping-for-econt' ),
 				],
 
 				// --- SECTION: SHIPMENT SETTINGS ---
@@ -703,6 +725,48 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 
 
 		/**
+		 * Group the current cart by resolved pickup profile.
+		 *
+		 * @return array<string, array{ids:int[],weight:float,subtotal:float,names:string[]}>
+		 */
+		public function split_cart_groups(): array {
+			$groups = [];
+			if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+				return $groups;
+			}
+			$profiles = $this->get_pickup_profiles();
+			$default  = $this->pickup_opt( 'pickup_default_profile', 'default' );
+			if ( ! isset( $profiles[ $default ] ) ) {
+				$default = 'default';
+			}
+			$fallback_weight = (float) $this->pickup_opt( 'teglo', '0.5' );
+			foreach ( WC()->cart->get_cart() as $item ) {
+				$pid = (int) ( $item['variation_id'] ?: $item['product_id'] );
+				$key = get_post_meta( $pid, '_drushfe_pickup_profile', true );
+				if ( ! $key && ( $parent = wp_get_post_parent_id( $pid ) ) ) {
+					$key = get_post_meta( $parent, '_drushfe_pickup_profile', true );
+				}
+				if ( ! $key || ! isset( $profiles[ $key ] ) ) {
+					$key = $default;
+				}
+				if ( ! isset( $groups[ $key ] ) ) {
+					$groups[ $key ] = [ 'ids' => [], 'weight' => 0.0, 'subtotal' => 0.0, 'names' => [] ];
+				}
+				$product = $item['data'];
+				$qty     = (int) $item['quantity'];
+				$w       = $product ? (float) $product->get_weight() : 0.0;
+				if ( $w <= 0 ) {
+					$w = $fallback_weight;
+				}
+				$groups[ $key ]['ids'][]     = $pid;
+				$groups[ $key ]['weight']   += $w * $qty;
+				$groups[ $key ]['subtotal'] += (float) ( $item['line_subtotal'] ?? 0 ) + (float) ( $item['line_subtotal_tax'] ?? 0 );
+				$groups[ $key ]['names'][]   = ( $product ? $product->get_name() : ( 'product#' . $pid ) ) . ' x' . $qty;
+			}
+			return $groups;
+		}
+
+		/**
 		 * Instance-settings reader safe to call while form fields are still
 		 * being built (get_option() can't resolve instance settings for keys
 		 * not yet registered — same chicken-and-egg as sender_city above).
@@ -837,6 +901,12 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				'automat' => __( 'to automat', 'drusoft-shipping-for-econt' ),
 			];
 			$suffix = $suffix_map[ $delivery_type ] ?? $suffix_map['address'];
+
+			$split_count = $session ? (int) $session->get( 'drushfe_split_count', 0 ) : 0;
+			if ( $split_count > 1 ) {
+				/* translators: %d: number of parcels */
+				$suffix .= ' (' . sprintf( _n( '%d parcel', '%d parcels', $split_count, 'drusoft-shipping-for-econt' ), $split_count ) . ')';
+			}
 
 			$this->add_rate( [
 				'id'        => $this->get_rate_id(),
