@@ -86,6 +86,14 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			// gate visibility on this stable boolean flag.
 			$order->add_meta_data( '_drushfe_econt_order', 1 );
 
+			// Record the resolved pickup profile: the admin order screen can
+			// override it before the waybill is generated.
+			$order_product_ids = [];
+			foreach ( $order->get_items() as $item ) {
+				$order_product_ids[] = (int) ( $item->get_variation_id() ?: $item->get_product_id() );
+			}
+			$order->add_meta_data( '_drushfe_pickup_profile', $this->resolve_pickup_profile_key( $order_product_ids ) );
+
 			// Mirror the delivery_type + office_id from the shipping LINE ITEM
 			// up to the ORDER. They're set on the rate in calculate_shipping()
 			// and stored as item meta — but the waybill generator reads them
@@ -418,6 +426,34 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					'description' => __( 'Format HH:MM. Latest time you can hand a shipment to an Econt courier. Econt enforces a per-city cut-off (typically 14:00–14:45) — values past that are rejected with "Изберете кога да ви посети куриер…". If you see that error, lower this value.', 'drusoft-shipping-for-econt' ),
 				],
 
+				// --- SECTION: ADDITIONAL PICKUP POINTS (multi-origin) ---
+				// Econt models the origin INSIDE the "Достави с Еконт" store
+				// behind the connect key, so each extra origin = another store
+				// created at delivery.econt.com with its own "Изпращане от"
+				// and its own connect code.
+				'section_pickup_profiles' => [
+					'title'       => __( 'Additional Pickup Points', 'drusoft-shipping-for-econt' ),
+					'type'        => 'title',
+					'description' => __( 'Optional. Each pickup point is a separate "Достави с Еконт" store with its own sending address/office and connect code (create them at delivery.econt.com). The store configured above is always available as the "default" profile. Assign per product on its Shipping tab, or programmatically via the drushfe_pickup_profile filter.', 'drusoft-shipping-for-econt' ),
+				],
+				'pickup_profiles' => [
+					'title'       => __( 'Pickup Points', 'drusoft-shipping-for-econt' ),
+					'type'        => 'textarea',
+					'css'         => 'height:110px;font-family:monospace',
+					'placeholder' => 'supplier1 | Доставчик X | 1234567@AbCdEfGhIjKlMnOpQrStUvWx',
+					'description' => __( 'One per line: key | label | connect code (StoreID@key — the second store\'s "Код за свързване" from Достави с Еконт).', 'drusoft-shipping-for-econt' ),
+				],
+				'pickup_mixed_policy' => [
+					'title'       => __( 'Mixed-cart Pickup Policy', 'drusoft-shipping-for-econt' ),
+					'type'        => 'select',
+					'default'     => 'default_profile',
+					'options'     => [
+						'default_profile' => __( 'Use the default store', 'drusoft-shipping-for-econt' ),
+						'first_item'      => __( 'Use the first item\'s pickup point', 'drusoft-shipping-for-econt' ),
+					],
+					'description' => __( 'Which origin to use when cart items are assigned to different pickup points.', 'drusoft-shipping-for-econt' ),
+				],
+
 				// --- SECTION: SHIPMENT SETTINGS ---
 				'section_shipment' => [
 					'title' => __( 'Shipment Settings', 'drusoft-shipping-for-econt' ),
@@ -595,6 +631,94 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			return $wpdb->get_results(
 				"SELECT id, name, address FROM {$wpdb->prefix}drushfe_offices ORDER BY name ASC LIMIT 50"
 			);
+		}
+
+		/**
+		 * All configured pickup profiles, keyed by profile key.
+		 *
+		 * 'default' is always present and is the store configured in the main
+		 * credentials fields, so existing installs behave exactly as before.
+		 * Every other profile is a separate "Достави с Еконт" store whose
+		 * connect code carries its own sending address/office.
+		 *
+		 * @return array<string, array{key:string,label:string,store_id:string,private_key:string}>
+		 */
+		public function get_pickup_profiles(): array {
+			$default_key = (string) $this->get_option( 'econt_private_key' );
+			$profiles    = [
+				'default' => [
+					'key'         => 'default',
+					'label'       => __( 'Default store', 'drusoft-shipping-for-econt' ),
+					'store_id'    => (string) $this->get_option( 'econt_store_id' ),
+					'private_key' => $default_key,
+				],
+			];
+			foreach ( preg_split( '/\r\n|\r|\n/', (string) $this->get_option( 'pickup_profiles', '' ) ) as $line ) {
+				$parts = array_map( 'trim', explode( '|', $line ) );
+				if ( count( $parts ) < 3 || '' === $parts[0] ) {
+					continue;
+				}
+				if ( ! preg_match( '/^(\d+)@[\w\-]+$/', $parts[2], $m ) ) {
+					continue;
+				}
+				$key = sanitize_key( $parts[0] );
+				$profiles[ $key ] = [
+					'key'         => $key,
+					'label'       => $parts[1] ?: $key,
+					'store_id'    => $m[1],
+					'private_key' => $parts[2],
+				];
+			}
+			return $profiles;
+		}
+
+		/**
+		 * Resolve which pickup profile applies for a set of products.
+		 *
+		 * Per-product assignment (_drushfe_pickup_profile meta) wins when all
+		 * items agree; disagreements fall back to the mixed-cart policy. The
+		 * drushfe_pickup_profile filter has the final word (used for
+		 * programmatic routing, e.g. supplier-based dropshipping).
+		 *
+		 * @param int[] $product_ids Product/variation IDs in the cart or order.
+		 */
+		public function resolve_pickup_profile_key( array $product_ids ): string {
+			$profiles = $this->get_pickup_profiles();
+			$assigned = [];
+			foreach ( $product_ids as $pid ) {
+				$key = get_post_meta( $pid, '_drushfe_pickup_profile', true );
+				if ( ! $key && ( $parent = wp_get_post_parent_id( $pid ) ) ) {
+					$key = get_post_meta( $parent, '_drushfe_pickup_profile', true );
+				}
+				$assigned[] = ( $key && isset( $profiles[ $key ] ) ) ? $key : 'default';
+			}
+			$unique = array_values( array_unique( $assigned ) );
+			if ( 1 === count( $unique ) ) {
+				$resolved = $unique[0];
+			} elseif ( 'first_item' === $this->get_option( 'pickup_mixed_policy', 'default_profile' ) ) {
+				$resolved = $assigned[0];
+			} else {
+				$resolved = 'default';
+			}
+			/**
+			 * Filter the resolved pickup profile key.
+			 *
+			 * @param string $resolved    Resolved profile key.
+			 * @param int[]  $product_ids Products being shipped.
+			 * @param array  $profiles    All configured profiles.
+			 */
+			$resolved = apply_filters( 'drushfe_pickup_profile', $resolved, $product_ids, $profiles );
+			return isset( $profiles[ $resolved ] ) ? $resolved : 'default';
+		}
+
+		/**
+		 * Connect key (Authorization) for a pickup profile — falls back to the
+		 * default store's key for unknown profiles.
+		 */
+		public function pickup_private_key( string $profile_key ): string {
+			$profiles = $this->get_pickup_profiles();
+			$p        = $profiles[ $profile_key ] ?? $profiles['default'];
+			return $p['private_key'];
 		}
 
 		/**

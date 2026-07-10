@@ -962,6 +962,114 @@ function drushfe_get_first_credentials(): ?array {
 }
 
 /**
+ * Helper: first configured shipping-method instance id (for contexts outside
+ * a zone, e.g. the product edit screen).
+ */
+function drushfe_get_first_instance_id(): int {
+	global $wpdb;
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$name = $wpdb->get_var(
+		"SELECT option_name FROM $wpdb->options
+		 WHERE option_name LIKE 'woocommerce\_drushfe\_econt\_%\_settings' LIMIT 1"
+	);
+	return $name && preg_match( '/_(\d+)_settings$/', $name, $m ) ? (int) $m[1] : 0;
+}
+
+/**
+ * Product edit screen: "Pickup point" select on the Shipping tab.
+ * Only rendered when extra pickup profiles are configured.
+ */
+function drushfe_product_pickup_field(): void {
+	$instance_id = drushfe_get_first_instance_id();
+	if ( ! $instance_id || ! class_exists( 'Drushfe_Shipping_Method' ) ) {
+		return;
+	}
+	$method   = new Drushfe_Shipping_Method( $instance_id );
+	$profiles = $method->get_pickup_profiles();
+	if ( count( $profiles ) < 2 ) {
+		return;
+	}
+	$options = [];
+	foreach ( $profiles as $key => $p ) {
+		$options[ $key ] = $p['label'];
+	}
+	woocommerce_wp_select( [
+		'id'          => '_drushfe_pickup_profile',
+		'label'       => __( 'Econt pickup point', 'drusoft-shipping-for-econt' ),
+		'options'     => $options,
+		'desc_tip'    => true,
+		'description' => __( 'Which Достави с Еконт store ships this product (e.g. a supplier warehouse for dropshipping).', 'drusoft-shipping-for-econt' ),
+	] );
+}
+add_action( 'woocommerce_product_options_shipping', 'drushfe_product_pickup_field' );
+
+function drushfe_save_product_pickup_field( int $post_id ): void {
+	if ( isset( $_POST['_drushfe_pickup_profile'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC product save handles the nonce.
+		$key = sanitize_key( wp_unslash( $_POST['_drushfe_pickup_profile'] ) );
+		if ( 'default' === $key ) {
+			delete_post_meta( $post_id, '_drushfe_pickup_profile' );
+		} else {
+			update_post_meta( $post_id, '_drushfe_pickup_profile', $key );
+		}
+	}
+}
+add_action( 'woocommerce_process_product_meta', 'drushfe_save_product_pickup_field' );
+
+/**
+ * Order admin: pickup-profile selector (shown until the waybill exists), so
+ * the origin can be changed per order before generating the waybill.
+ */
+function drushfe_admin_pickup_selector( $order ): void {
+	if ( ! $order instanceof WC_Order ) {
+		return;
+	}
+	$shipping_methods = $order->get_shipping_methods();
+	$shipping_method  = reset( $shipping_methods );
+	if ( ! $shipping_method || 'drushfe_econt' !== $shipping_method->get_method_id() ) {
+		return;
+	}
+	if ( $order->get_meta( '_drushfe_waybill_id' ) ) {
+		return; // waybill already generated — origin is fixed
+	}
+	if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
+		return;
+	}
+	$method   = new Drushfe_Shipping_Method( $shipping_method->get_instance_id() );
+	$profiles = $method->get_pickup_profiles();
+	if ( count( $profiles ) < 2 ) {
+		return;
+	}
+	$current = (string) $order->get_meta( '_drushfe_pickup_profile' );
+	if ( '' === $current ) {
+		$current = 'default';
+	}
+	echo '<p class="form-field form-field-wide"><label for="drushfe_pickup_profile"><strong>'
+		. esc_html__( 'Econt pickup point', 'drusoft-shipping-for-econt' ) . '</strong></label>';
+	echo '<select name="drushfe_pickup_profile" id="drushfe_pickup_profile">';
+	foreach ( $profiles as $key => $p ) {
+		printf(
+			'<option value="%s"%s>%s</option>',
+			esc_attr( $key ),
+			selected( $current, $key, false ),
+			esc_html( $p['label'] )
+		);
+	}
+	echo '</select></p>';
+}
+add_action( 'woocommerce_admin_order_data_after_shipping_address', 'drushfe_admin_pickup_selector' );
+
+function drushfe_save_admin_pickup_selector( int $order_id ): void {
+	if ( isset( $_POST['drushfe_pickup_profile'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC order save handles the nonce.
+		$order = wc_get_order( $order_id );
+		if ( $order && ! $order->get_meta( '_drushfe_waybill_id' ) ) {
+			$order->update_meta_data( '_drushfe_pickup_profile', sanitize_key( wp_unslash( $_POST['drushfe_pickup_profile'] ) ) );
+			$order->save();
+		}
+	}
+}
+add_action( 'woocommerce_process_shop_order_meta', 'drushfe_save_admin_pickup_selector', 20 );
+
+/**
  * Helper: Transliterate Latin to Cyrillic (Bulgarian standard)
  */
 /*
@@ -1573,6 +1681,22 @@ function drushfe_calculate_price_ajax(): void {
 
 	$settings = function_exists( 'drushfe_get_first_credentials' ) ? drushfe_get_first_credentials() : [];
 	$private_key = $settings['econt_private_key'] ?? '';
+
+	// Multi-origin: price against the cart's resolved pickup store, so the
+	// quoted origin always matches the store the waybill will ship from.
+	$mo_instance = function_exists( 'drushfe_get_first_instance_id' ) ? drushfe_get_first_instance_id() : 0;
+	if ( $mo_instance && class_exists( 'Drushfe_Shipping_Method' ) ) {
+		$cart_ids = [];
+		foreach ( WC()->cart->get_cart() as $cart_item ) {
+			$cart_ids[] = (int) ( $cart_item['variation_id'] ?: $cart_item['product_id'] );
+		}
+		$mo_method = new Drushfe_Shipping_Method( $mo_instance );
+		$mo_key    = $mo_method->resolve_pickup_profile_key( $cart_ids );
+		if ( 'default' !== $mo_key ) {
+			$private_key = $mo_method->pickup_private_key( $mo_key );
+		}
+	}
+
 	if ( empty( $private_key ) ) {
 		wp_send_json_error( __( 'Econt private key not configured', 'drusoft-shipping-for-econt' ) );
 	}

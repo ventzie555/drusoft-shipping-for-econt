@@ -70,6 +70,16 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 			$settings         = get_option( 'woocommerce_drushfe_econt_' . $instance_id . '_settings' );
 
 			$private_key = $settings['econt_private_key'] ?? '';
+
+			// Apply the order's pickup profile (may have been changed by the
+			// admin after checkout): each profile is its own Достави с Еконт
+			// store, so switching origin = switching the connect key.
+			$pickup_profile = (string) $order->get_meta( '_drushfe_pickup_profile' );
+			if ( '' !== $pickup_profile && 'default' !== $pickup_profile && class_exists( 'Drushfe_Shipping_Method' ) ) {
+				$method      = new Drushfe_Shipping_Method( $instance_id );
+				$private_key = $method->pickup_private_key( $pickup_profile );
+			}
+
 			if ( ! $private_key ) {
 				return new WP_Error( 'no_credentials', __( 'Econt private key is not configured.', 'drusoft-shipping-for-econt' ) );
 			}
