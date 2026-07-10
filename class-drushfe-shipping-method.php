@@ -443,12 +443,22 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					'placeholder' => 'supplier1 | Доставчик X | 1234567@AbCdEfGhIjKlMnOpQrStUvWx',
 					'description' => __( 'One per line: key | label | connect code (StoreID@key — the second store\'s "Код за свързване" from Достави с Еконт).', 'drusoft-shipping-for-econt' ),
 				],
+				'pickup_default_profile' => [
+					'title'       => __( 'Default Pickup Point', 'drusoft-shipping-for-econt' ),
+					'type'        => 'select',
+					'default'     => 'default',
+					'options'     => array_map(
+						static fn( $p ) => $p['label'],
+						$this->get_pickup_profiles()
+					),
+					'description' => __( 'Used for products without an explicit pickup-point assignment.', 'drusoft-shipping-for-econt' ),
+				],
 				'pickup_mixed_policy' => [
 					'title'       => __( 'Mixed-cart Pickup Policy', 'drusoft-shipping-for-econt' ),
 					'type'        => 'select',
 					'default'     => 'default_profile',
 					'options'     => [
-						'default_profile' => __( 'Use the default store', 'drusoft-shipping-for-econt' ),
+						'default_profile' => __( 'Use the default pickup point', 'drusoft-shipping-for-econt' ),
 						'first_item'      => __( 'Use the first item\'s pickup point', 'drusoft-shipping-for-econt' ),
 					],
 					'description' => __( 'Which origin to use when cart items are assigned to different pickup points.', 'drusoft-shipping-for-econt' ),
@@ -684,13 +694,17 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 		 */
 		public function resolve_pickup_profile_key( array $product_ids ): string {
 			$profiles = $this->get_pickup_profiles();
+			$default  = (string) $this->get_option( 'pickup_default_profile', 'default' );
+			if ( ! isset( $profiles[ $default ] ) ) {
+				$default = 'default';
+			}
 			$assigned = [];
 			foreach ( $product_ids as $pid ) {
 				$key = get_post_meta( $pid, '_drushfe_pickup_profile', true );
 				if ( ! $key && ( $parent = wp_get_post_parent_id( $pid ) ) ) {
 					$key = get_post_meta( $parent, '_drushfe_pickup_profile', true );
 				}
-				$assigned[] = ( $key && isset( $profiles[ $key ] ) ) ? $key : 'default';
+				$assigned[] = ( $key && isset( $profiles[ $key ] ) ) ? $key : $default;
 			}
 			$unique = array_values( array_unique( $assigned ) );
 			if ( 1 === count( $unique ) ) {
@@ -698,7 +712,7 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			} elseif ( 'first_item' === $this->get_option( 'pickup_mixed_policy', 'default_profile' ) ) {
 				$resolved = $assigned[0];
 			} else {
-				$resolved = 'default';
+				$resolved = $default;
 			}
 			/**
 			 * Filter the resolved pickup profile key.
