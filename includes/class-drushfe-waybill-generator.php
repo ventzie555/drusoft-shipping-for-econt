@@ -92,6 +92,12 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 			$office_code   = (string) $order->get_meta( '_drushfe_office_id' );
 			$cod           = in_array( $order->get_payment_method(), [ 'cod' ], true );
 
+			// Inspection before payment. Resolved at waybill time so the merchant's
+			// current setting applies even to orders checked out before the option
+			// existed. Only meaningful on COD shipments; impossible at Econtomats.
+			$inspection = (string) ( $settings['inspection_option'] ?? 'none' );
+			$can_inspect = $cod && 'automat' !== $delivery_type;
+
 			$payload = [
 				'id'                  => '',
 				'orderNumber'         => (string) $order_id,
@@ -99,6 +105,8 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				'orderTime'           => '',
 				'cod'                 => $cod,
 				'partialDelivery'     => $cod ? true : '',
+				'payAfterAccept'      => $can_inspect && in_array( $inspection, [ 'accept', 'test' ], true ),
+				'payAfterTest'        => $can_inspect && 'test' === $inspection,
 				'currency'            => get_woocommerce_currency(),
 				'shipmentDescription' => '',
 				'shipmentNumber'      => '',

@@ -572,6 +572,18 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					'type'        => 'checkbox',
 					'default'     => 'yes',
 				],
+				'inspection_option' => [
+					'title'       => __( 'Inspection before payment', 'drusoft-shipping-for-econt' ),
+					'type'        => 'select',
+					'default'     => 'none',
+					'description' => __( 'Let the recipient inspect (or test) the goods before paying the COD amount. Not available for Econtomat deliveries. Return shipment on refusal is at your expense.', 'drusoft-shipping-for-econt' ),
+					'desc_tip'    => true,
+					'options'     => [
+						'none'   => __( 'No', 'drusoft-shipping-for-econt' ),
+						'accept' => __( 'Inspection (open before payment)', 'drusoft-shipping-for-econt' ),
+						'test'   => __( 'Inspection and test', 'drusoft-shipping-for-econt' ),
+					],
+				],
 
 				// --- SECTION: WORKFLOW & OPTIONS ---
 				'section_options' => [
