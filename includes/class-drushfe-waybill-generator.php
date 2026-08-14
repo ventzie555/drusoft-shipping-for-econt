@@ -176,6 +176,43 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					];
 					$items_desc[] = $name;
 				}
+
+				// COD must equal what the customer owes, and Достави с Еконт
+				// derives it from the sum of items[].totalPrice — which so far
+				// carried only the PRODUCT lines. The shipping the customer
+				// paid (and any per-line rounding cents) was missing, so every
+				// COD parcel would have collected less than the order total —
+				// the same disease the Speedy plugin shipped with the amount
+				// axis (fixed there 14.08.2026, order 15961: 141.66 collected
+				// for a 172.81 order). One line closes both gaps: a "Доставка"
+				// item carrying the exact difference to the order total.
+				// Split shipments keep their own item subsets, so the delta is
+				// added once, on the first parcel only.
+				if ( ! $is_split || 1 === $parcel_no ) {
+					$items_sum = 0.0;
+					foreach ( $g_payload['items'] as $g_item ) {
+						$items_sum += (float) $g_item['totalPrice'];
+					}
+					$delta = round( (float) $order->get_total() - $items_sum, 2 );
+					if ( $is_split ) {
+						// under split, compare against the WHOLE order total is
+						// wrong — only shipping+rounding belongs here.
+						$delta = round(
+							(float) $order->get_shipping_total() + (float) $order->get_shipping_tax(), 2 );
+					}
+					if ( $delta > 0.009 ) {
+						$g_payload['items'][] = [
+							'name'        => 'Доставка',
+							'SKU'         => '',
+							'URL'         => '',
+							'count'       => 1,
+							'hideCount'   => '',
+							'totalPrice'  => $delta,
+							'totalWeight' => 0,
+						];
+					}
+				}
+
 				$g_payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
 				if ( $is_split ) {
 					// each store needs its own unique order number
