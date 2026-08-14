@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.4
+ * Version:     1.0.5
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
