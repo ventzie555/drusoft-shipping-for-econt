@@ -785,7 +785,18 @@ function drushfe_get_tracking_info( $order ): ?array {
 	if ( ! is_a( $order, 'WC_Order' ) ) {
 		return null;
 	}
-	$waybill = (string) $order->get_meta( '_drushfe_waybill_id' );
+	// The public parcel number is shipmentNumber (saved by the waybill generator).
+	// _drushfe_waybill_id is Econt's INTERNAL order id — track-shipment does not
+	// resolve it, so it must never be shown to the customer. Orders created before
+	// the shipment number was stored still resolve it from the saved API response.
+	$waybill = (string) $order->get_meta( '_drushfe_shipment_number' );
+	if ( '' === $waybill ) {
+		$resp = $order->get_meta( '_drushfe_waybill_response' );
+		$resp = is_string( $resp ) ? json_decode( $resp, true ) : $resp;
+		if ( is_array( $resp ) && ! empty( $resp['shipmentNumber'] ) ) {
+			$waybill = (string) $resp['shipmentNumber'];
+		}
+	}
 	if ( '' === $waybill ) {
 		return null; // not shipped yet / not an Econt waybill
 	}

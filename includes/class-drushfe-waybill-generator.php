@@ -285,6 +285,12 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					$first_waybill_id = $waybill_id;
 					$order->update_meta_data( '_drushfe_waybill_id', $waybill_id );
 					$order->update_meta_data( '_drushfe_waybill_response', $body );
+					// The public parcel number lives in shipmentNumber — the id above is
+					// Econt's INTERNAL order id, which track-shipment does not resolve.
+					// Customer-facing tracking must use this one.
+					if ( ! empty( $body['shipmentNumber'] ) ) {
+						$order->update_meta_data( '_drushfe_shipment_number', (string) $body['shipmentNumber'] );
+					}
 					$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
 				} else {
 					/* translators: 1: parcel number, 2: waybill id */
