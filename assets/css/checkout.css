@@ -317,3 +317,31 @@
     color: #777;
     font-size: 12px;
 }
+
+/* Phones: the centred 80vh dialog overflows once the browser's URL bar eats
+   into the layout viewport (100vh > visible height), producing a scrollbar
+   inside the modal; the filter pills can also overflow sideways. Go full
+   screen with dynamic-viewport units and let the map flex to the remainder. */
+@media (max-width: 640px) {
+    .drushfe-map-modal.is-open {
+        align-items: stretch;
+        justify-content: stretch;
+    }
+    .drushfe-map-modal__content {
+        width: 100vw;
+        max-width: none;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+    .drushfe-map-modal__filters {
+        flex-wrap: wrap;
+        row-gap: 6px;
+    }
+    .drushfe-map-modal__map {
+        min-height: 0;
+    }
+    .drushfe-map-modal__hint {
+        display: none;
+    }
+}

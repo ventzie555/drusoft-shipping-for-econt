@@ -335,6 +335,25 @@
 
             renderMarkers();
 
+            // Focus the view on the caller's city: renderMarkers() fits the FULL
+            // point set (nationwide for this courier), which zooms out to the whole
+            // country even though the customer already picked a city. The full set
+            // stays plotted so search/filters still reach everything — only the
+            // initial viewport narrows.
+            if (opts.focusCityId != null && String(opts.focusCityId) !== '') {
+                var focusPts = allPoints.filter(function (p) {
+                    return String(p.city_id) === String(opts.focusCityId)
+                        && isFinite(p.lat) && isFinite(p.lng) && !(p.lat === 0 && p.lng === 0);
+                });
+                if (focusPts.length) {
+                    var fb = null;
+                    focusPts.forEach(function (p) {
+                        fb = fb ? fb.extend([p.lat, p.lng]) : L.latLngBounds([p.lat, p.lng], [p.lat, p.lng]);
+                    });
+                    if (fb && fb.isValid()) mapInstance.fitBounds(fb, { padding: [40, 40], maxZoom: 16 });
+                }
+            }
+
             // Leaflet needs invalidateSize when the container has just become visible.
             setTimeout(function () { if (mapInstance) mapInstance.invalidateSize(); }, 50);
         }).catch(function (err) {

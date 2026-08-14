@@ -236,6 +236,9 @@
                     pickLabel:     params.i18n.map_pick,
                     errorLabel:    params.i18n.map_error,
                     defaultFilter: defaultFilter,
+                    // Open zoomed to the customer's already-chosen city instead of
+                    // the whole country (the full set stays searchable).
+                    focusCityId:   $('#' + currentContext + '_city').val() || null,
                     i18n: {
                         offices:            params.i18n.map_filter_office,
                         automats:           params.i18n.map_filter_automat,
