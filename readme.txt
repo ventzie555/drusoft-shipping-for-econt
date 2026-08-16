@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.4
+Stable tag: 1.0.7
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,17 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.7 =
+* New: optional inspection before payment. The merchant can let the customer open and check the parcel at the office before paying, or test it, and the option is skipped automatically at Econtomats where there is nobody to open with. Off by default — enable it in the shipping method settings.
+* Fixed: the office map opened showing the whole country instead of the city the customer had just chosen, so they had to find their own town before picking an office.
+* Fixed: on phones the map dialog showed its own scrollbars and did not use the full screen, which made picking an office awkward.
+
+= 1.0.6 =
+* Fix: customer-facing tracking links now use the public shipment number (shipmentNumber) instead of the internal Econt order id, which the track-shipment page cannot resolve.
+
+= 1.0.5 =
+* Important fix: the cash-on-delivery (COD) amount now includes the shipping charge and rounding — a "Доставка" line is added so the collected amount equals the full order total. Previously COD parcels collected only the product lines' total. If you ship COD, please update.
 
 = 1.0.4 =
 * Fixed: switching the shipping method to another courier via keyboard (arrow keys on the radio group), assistive technology or a script left this plugin's city dropdown active under the other courier, with Econt city IDs the other courier could misread. The cleanup that previously ran only on mouse clicks now also runs for those switches.
