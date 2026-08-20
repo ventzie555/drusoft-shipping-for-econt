@@ -88,7 +88,11 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			// the admin list miss new orders. Keep that meta as the detailed
 			// payload (still useful for waybill creation when populated), but
 			// gate visibility on this stable boolean flag.
-			$order->add_meta_data( '_drushfe_econt_order', 1 );
+			// update_meta_data(), never add_meta_data(): this hook fires on every
+			// save of the order, and add_ APPENDS a row each time instead of
+			// replacing it. Live orders had accumulated 21 identical copies of
+			// this flag before 2026-08-20.
+			$order->update_meta_data( '_drushfe_econt_order', 1 );
 
 			// Record the resolved pickup profile: the admin order screen can
 			// override it before the waybill is generated.
@@ -165,10 +169,10 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				$item_delivery = (string) $shipping_item->get_meta( '_drushfe_delivery_type' );
 				$item_office   = (string) $shipping_item->get_meta( '_drushfe_office_id' );
 				if ( $item_delivery !== '' ) {
-					$order->add_meta_data( '_drushfe_delivery_type', $item_delivery );
+					$order->update_meta_data( '_drushfe_delivery_type', $item_delivery );
 				}
 				if ( $item_office !== '' ) {
-					$order->add_meta_data( '_drushfe_office_id', $item_office );
+					$order->update_meta_data( '_drushfe_office_id', $item_office );
 				}
 				break;
 			}
@@ -197,7 +201,7 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				if ( ! $row || empty( $row->name ) ) {
 					continue;
 				}
-				$order->add_meta_data( "_drushfe_{$addr}_city_id", (int) $value );
+				$order->update_meta_data( "_drushfe_{$addr}_city_id", (int) $value );
 				$order->$city_setter( $row->name );
 				if ( ! empty( $row->post_code ) ) {
 					$order->$pc_setter( $row->post_code );
@@ -224,10 +228,17 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				}
 
 				// 4. Save to order meta
-				$order->add_meta_data( '_drushfe_order_data', $session_data );
+				$order->update_meta_data( '_drushfe_order_data', $session_data );
 
-				if ( isset( $session_data['recipient']['pickupOfficeId'] ) ) {
-					$order->add_meta_data( '_drushfe_office_id', $session_data['recipient']['pickupOfficeId'] );
+				// Only when the shipping item above did not already supply it.
+				// While these were add_meta_data() calls, get_meta() returned the
+				// FIRST row written — the shipping item's value — so writing
+				// unconditionally here would hand the session a precedence it
+				// never had. The two agree in practice; the guard keeps them
+				// ordered the same way if they ever stop agreeing.
+				if ( isset( $session_data['recipient']['pickupOfficeId'] )
+					&& '' === (string) $order->get_meta( '_drushfe_office_id' ) ) {
+					$order->update_meta_data( '_drushfe_office_id', $session_data['recipient']['pickupOfficeId'] );
 				}
 			}
 		}
