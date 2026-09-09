@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.8
+ * Version:     1.0.9
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '1.0.8' );
+define( 'DRUSHFE_VER',  '1.0.9' );
 
 /**
  * Load Dependencies
@@ -91,26 +91,7 @@ function drushfe_activate(): void {
 	// Schedule recurring background sync (every 24 hours via Action Scheduler).
 	// This fires regardless of whether individual runs succeed or fail.
 	// Check both global settings and per-instance settings for credentials.
-	$has_credentials = false;
-	$settings = get_option( 'woocommerce_drushfe_econt_settings' );
-	if ( ! empty( $settings['econt_private_key'] ) && ! empty( $settings['econt_private_key'] ) ) {
-		$has_credentials = true;
-	} else {
-		global $wpdb;
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 1",
-				'woocommerce_drushfe_econt_%_settings'
-			)
-		);
-		if ( $rows ) {
-			$inst = maybe_unserialize( $rows[0]->option_value );
-			if ( is_array( $inst ) && ! empty( $inst['econt_private_key'] ) && ! empty( $inst['econt_private_key'] ) ) {
-				$has_credentials = true;
-			}
-		}
-	}
+	$has_credentials = drushfe_has_credentials();
 	if ( $has_credentials ) {
 		// Run the sync NOW so tables are populated before any page load.
 		require_once DRUSHFE_PATH . 'includes/class-drushfe-syncer.php';
@@ -121,6 +102,74 @@ function drushfe_activate(): void {
 			as_schedule_recurring_action( time() + DAY_IN_SECONDS, DAY_IN_SECONDS, 'drushfe_sync_locations_event' );
 		}
 	}
+}
+
+/**
+ * Are API credentials saved anywhere — the legacy global option or any
+ * shipping-zone instance? Cities and offices are the same for every account,
+ * so one configured instance is enough to keep the location tables fresh.
+ *
+ * @return bool
+ */
+function drushfe_has_credentials(): bool {
+	$settings = get_option( 'woocommerce_drushfe_econt_settings' );
+	if ( ! empty( $settings['econt_private_key'] ) && ! empty( $settings['econt_private_key'] ) ) {
+		return true;
+	}
+	global $wpdb;
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
+			'woocommerce_drushfe_econt_%_settings'
+		)
+	);
+	foreach ( (array) $rows as $row ) {
+		$inst = maybe_unserialize( $row->option_value );
+		if ( is_array( $inst ) && ! empty( $inst['econt_private_key'] ) && ! empty( $inst['econt_private_key'] ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Keep the daily location refresh scheduled no matter how the plugin was set up.
+ *
+ * Until 1.0.8 the recurring sync was registered in exactly two places: on
+ * activation, and only if credentials already existed at that moment; and on
+ * saving the method settings through wp-admin. Activate via wp-cli before the
+ * credentials exist, then write the settings option programmatically, and
+ * neither path runs — the tables fill once by hand and then never refresh. Two
+ * live shops were found this way on 2026-09-09: one with office data 19 days
+ * old (two new Econt offices missing), one whose city table was from a
+ * materially older dataset. Nothing reported it, because nothing was failing.
+ *
+ * So: on a normal request, when credentials exist and nothing is scheduled,
+ * schedule it. The as_next_scheduled_action() lookup is a database query, so
+ * the outcome is cached in a transient and the check costs one option read
+ * per request. The transient is short when there are no credentials yet, so a
+ * shop that adds them later is picked up within the hour.
+ *
+ * @return void
+ */
+add_action( 'init', 'drushfe_ensure_sync_scheduled', 20 );
+function drushfe_ensure_sync_scheduled(): void {
+	if ( get_transient( 'drushfe_sync_scheduled' ) ) {
+		return;
+	}
+	if ( ! function_exists( 'as_next_scheduled_action' ) || ! function_exists( 'as_schedule_recurring_action' ) ) {
+		return;
+	}
+	if ( ! drushfe_has_credentials() ) {
+		set_transient( 'drushfe_sync_scheduled', 1, HOUR_IN_SECONDS );
+		return;
+	}
+	if ( ! as_next_scheduled_action( 'drushfe_sync_locations_event' ) ) {
+		// Soon rather than in 24 h: if we are here, the data is already stale.
+		as_schedule_recurring_action( time() + 5 * MINUTE_IN_SECONDS, DAY_IN_SECONDS, 'drushfe_sync_locations_event' );
+	}
+	set_transient( 'drushfe_sync_scheduled', 1, 12 * HOUR_IN_SECONDS );
 }
 
 /**
@@ -135,6 +184,7 @@ function drushfe_deactivate(): void {
 	if ( function_exists( 'as_unschedule_all_actions' ) ) {
 		as_unschedule_all_actions( 'drushfe_sync_locations_event' );
 	}
+	delete_transient( 'drushfe_sync_scheduled' );
 
 	// Drop Database Tables
 	require_once DRUSHFE_PATH . 'includes/class-drushfe-activator.php';

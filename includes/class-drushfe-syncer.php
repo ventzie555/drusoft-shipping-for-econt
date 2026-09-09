@@ -32,8 +32,17 @@ class Drushfe_Syncer {
 
 		$base_url = self::get_nomenclatures_base_url( $settings );
 
-		self::update_cities( $base_url );
-		self::update_offices( $base_url );
+		$cities  = self::update_cities( $base_url );
+		$offices = self::update_offices( $base_url );
+
+		// The moment both tables were refreshed from the API. An option write
+		// works regardless of who owns the uploads directory — the WC log does
+		// not: wc_get_logger() swallows a failed file write, so a missing log
+		// line proves nothing about whether this ran. This is what the settings
+		// screen shows, and what to trust when the log looks dead.
+		if ( $cities && $offices ) {
+			update_option( 'drushfe_last_sync', time(), false );
+		}
 	}
 
 	/**
@@ -94,7 +103,7 @@ class Drushfe_Syncer {
 	/**
 	 * Fetch and store cities for Bulgaria.
 	 */
-	private static function update_cities( string $base_url ) {
+	private static function update_cities( string $base_url ): bool {
 		global $wpdb;
 
 		$data = self::nomenclatures_request(
@@ -104,7 +113,7 @@ class Drushfe_Syncer {
 		);
 
 		if ( empty( $data['cities'] ) || ! is_array( $data['cities'] ) ) {
-			return;
+			return false;
 		}
 
 		$table_name = $wpdb->prefix . 'drushfe_cities';
@@ -135,6 +144,7 @@ class Drushfe_Syncer {
 		if ( class_exists( 'WC_Logger' ) ) {
 			wc_get_logger()->info( '[Econt Cities] synced ' . $count . ' rows', [ 'source' => 'drusoft-shipping-for-econt' ] );
 		}
+		return $count > 0;
 	}
 
 	/**
@@ -144,7 +154,7 @@ class Drushfe_Syncer {
 	 * and distinguishes them via `isAPS`. We tag the row in `office_type` so the
 	 * existing drushfe_is_automat() helper continues to work without changes.
 	 */
-	private static function update_offices( string $base_url ) {
+	private static function update_offices( string $base_url ): bool {
 		global $wpdb;
 
 		$data = self::nomenclatures_request(
@@ -154,7 +164,7 @@ class Drushfe_Syncer {
 		);
 
 		if ( empty( $data['offices'] ) || ! is_array( $data['offices'] ) ) {
-			return;
+			return false;
 		}
 
 		$table_name = $wpdb->prefix . 'drushfe_offices';
@@ -193,6 +203,7 @@ class Drushfe_Syncer {
 		if ( class_exists( 'WC_Logger' ) ) {
 			wc_get_logger()->info( '[Econt Offices] synced ' . $count . ' rows', [ 'source' => 'drusoft-shipping-for-econt' ] );
 		}
+		return $count > 0;
 	}
 
 	private static function mb_ucfirst( $string, $encoding = 'UTF-8' ) {

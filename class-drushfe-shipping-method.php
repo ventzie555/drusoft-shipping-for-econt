@@ -57,6 +57,10 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			// Convert the stashed mixed-pickup meta into a real order note
 			// once the order exists (idempotent — the meta is consumed).
 			add_action( 'woocommerce_checkout_order_created', array( $this, 'add_mixed_pickup_note' ) );
+
+			// An order placed without a delivery price is accepted — the sale
+			// must not be lost — but the merchant has to hear about it.
+			add_action( 'woocommerce_checkout_order_created', array( $this, 'flag_unpriced_shipping' ) );
 		}
 
 		/**
@@ -244,6 +248,60 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 		}
 
 		/**
+		 * Leave an order note when the chosen Econt rate reached the order
+		 * with no price on it.
+		 *
+		 * The rate is tagged `missing_address` whenever the price call returned
+		 * nothing, and checkout deliberately accepts such an order rather than
+		 * refusing it: the merchant should get the sale. What was missing was any
+		 * signal — the order arrives with a 0.00 shipping line and nothing in the
+		 * order history says why, so it is found at waybill time or not at all
+		 * (trisestri.bg order 807, 09.09.2026: accepted, ship_total 0.00, silent).
+		 *
+		 * Runs on woocommerce_checkout_order_created, after the order is saved, and
+		 * reads the office through a fresh load: the object handed to this hook
+		 * predates the drushfe_save_order_meta() rescue of the office from \$_POST.
+		 * Idempotent via order meta, so several registered instances add it once.
+		 *
+		 * @param WC_Order $order The created order.
+		 */
+		public function flag_unpriced_shipping( $order ): void {
+			if ( ! $order instanceof WC_Order ) {
+				return;
+			}
+			$fresh = wc_get_order( $order->get_id() );
+			if ( ! $fresh || $fresh->get_meta( '_drushfe_unpriced_noted' ) ) {
+				return;
+			}
+			foreach ( $fresh->get_shipping_methods() as $item ) {
+				if ( 'drushfe_econt' !== $item->get_method_id() ) {
+					continue;
+				}
+				if ( empty( $item->get_meta( 'missing_address' ) ) ) {
+					return;
+				}
+				$type   = (string) $fresh->get_meta( '_drushfe_delivery_type' );
+				$office = (string) $fresh->get_meta( '_drushfe_office_id' );
+				if ( 'office' === $type ) {
+					$where = 'до офис' . ( $office ? ' ' . $office : '' );
+				} elseif ( 'automat' === $type ) {
+					$where = 'до Еконтомат' . ( $office ? ' ' . $office : '' );
+				} else {
+					$where = 'до адрес';
+				}
+				$fresh->add_order_note( sprintf(
+					/* translators: 1: courier name, 2: delivery destination such as "до офис 6307" */
+					__( 'Цената за доставка не беше изчислена при поръчката: %1$s не върна цена и клиентът не е таксуван за доставка (%2$s). Проверете цената, преди да изпратите пратката.', 'drusoft-shipping-for-econt' ),
+					'Еконт',
+					$where
+				) );
+				$fresh->update_meta_data( '_drushfe_unpriced_noted', 1 );
+				$fresh->save();
+				return;
+			}
+		}
+
+		/**
 		 * Turn the stashed mixed-pickup meta into an order note. Runs on
 		 * woocommerce_checkout_order_created (order saved, has an ID); the
 		 * meta is consumed so multiple registered instances add it once.
@@ -409,6 +467,37 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 		 * Fields that require a valid API connection.
 		 * These are merged into the main form_fields array.
 		 */
+		/**
+		 * One line for the settings screen: when the location tables were last
+		 * refreshed from Econt, and when the next refresh is due.
+		 *
+		 * @return string
+		 */
+		private function sync_status_text(): string {
+			$last = (int) get_option( 'drushfe_last_sync', 0 );
+			$next = function_exists( 'as_next_scheduled_action' ) ? as_next_scheduled_action( 'drushfe_sync_locations_event' ) : false;
+			if ( $last ) {
+				$text = sprintf(
+					/* translators: 1: date and time, 2: human-readable age such as "3 hours" */
+					__( 'Last refreshed from Econt: %1$s (%2$s ago).', 'drusoft-shipping-for-econt' ),
+					date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $last ),
+					human_time_diff( $last )
+				);
+				if ( time() - $last > 3 * DAY_IN_SECONDS ) {
+					$text .= ' <strong>' . __( 'That is more than 3 days — the daily refresh may not be running.', 'drusoft-shipping-for-econt' ) . '</strong>';
+				}
+			} else {
+				$text = '<strong>' . __( 'Never refreshed on a schedule yet.', 'drusoft-shipping-for-econt' ) . '</strong>';
+			}
+			$text .= ' ' . ( $next
+				? sprintf(
+					/* translators: %s: human-readable time until the next run, such as "5 hours" */
+					__( 'Next refresh in %s.', 'drusoft-shipping-for-econt' ),
+					human_time_diff( time(), (int) $next ) )
+				: __( 'No refresh is scheduled — it will be scheduled automatically on the next page load.', 'drusoft-shipping-for-econt' ) );
+			return $text;
+		}
+
 		private function add_authenticated_fields(): void {
 			
 			// Read directly from saved settings to avoid WC looking up defaults
@@ -442,6 +531,18 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			}
 
 			$authenticated = [
+
+				// --- SECTION: LOCATION DATA ---
+				// Read from an option the syncer writes on success, not from the
+				// WC log: a log line can silently fail to write when the uploads
+				// directory is owned by a different user than the one running the
+				// sync (wp-cli vs php-fpm), and then an admin concludes the job is
+				// dead when it is not. The option write is immune to that.
+				'sync_status' => [
+					'title'       => __( 'Offices & cities', 'drusoft-shipping-for-econt' ),
+					'type'        => 'title',
+					'description' => $this->sync_status_text(),
+				],
 
 				// --- SECTION: SENDER DETAILS ---
 				'section_sender' => [
