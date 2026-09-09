@@ -1906,16 +1906,29 @@ function drushfe_calculate_price_ajax(): void {
  */
 add_action( 'woocommerce_checkout_update_order_meta', 'drushfe_save_order_meta' );
 function drushfe_save_order_meta( $order_id ): void {
+	// Write through the order object, never update_post_meta(): with HPOS the
+	// order's meta lives in wp_wc_orders_meta and that is what get_meta() reads,
+	// so a postmeta write is silently lost and the office arrives as 0.
+	$order = wc_get_order( $order_id );
+	if ( ! $order ) {
+		return;
+	}
+	$changed = false;
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified by WooCommerce checkout.
 	if ( ! empty( $_POST['econt_delivery_type'] ) ) {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing
-		update_post_meta( $order_id, '_drushfe_delivery_type', sanitize_text_field( wp_unslash( $_POST['econt_delivery_type'] ) ) );
+		$order->update_meta_data( '_drushfe_delivery_type', sanitize_text_field( wp_unslash( $_POST['econt_delivery_type'] ) ) );
+		$changed = true;
 	}
 
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing
 	if ( ! empty( $_POST['econt_office_id'] ) ) {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing
-		update_post_meta( $order_id, '_drushfe_office_id', sanitize_text_field( wp_unslash( $_POST['econt_office_id'] ) ) );
+		$order->update_meta_data( '_drushfe_office_id', sanitize_text_field( wp_unslash( $_POST['econt_office_id'] ) ) );
+		$changed = true;
+	}
+	if ( $changed ) {
+		$order->save();
 	}
 }
 
