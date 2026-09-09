@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.7
+Stable tag: 1.0.8
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -145,6 +145,10 @@ The plugin minimizes API calls through several strategies:
 
 == Changelog ==
 
+= 1.0.8 =
+* Important fix: when the delivery-price call failed at checkout, the office the customer had picked was not saved on the order. The order still went through — correctly, you should not lose the sale — but it reached you marked "to office" with no office on it, and the waybill could not be created without phoning the customer to ask which office they had chosen. This affected every shop using WooCommerce's High-Performance Order Storage, which is the default for new installations. Please update if you deliver to offices or automats.
+* Fixed: the chosen office and delivery type could be stored as several repeated rows on one order instead of a single value that gets replaced.
+
 = 1.0.7 =
 * New: optional inspection before payment. The merchant can let the customer open and check the parcel at the office before paying, or test it, and the option is skipped automatically at Econtomats where there is nobody to open with. Off by default — enable it in the shipping method settings.
 * Fixed: the office map opened showing the whole country instead of the city the customer had just chosen, so they had to find their own town before picking an office.
@@ -187,6 +191,9 @@ The plugin minimizes API calls through several strategies:
 * Bulgarian (bg_BG) translation included.
 
 == Upgrade Notice ==
+
+= 1.0.8 =
+Recommended update. On WooCommerce High-Performance Order Storage the office chosen by the customer could be lost from the order whenever the delivery-price call failed, leaving an order marked "to office" with no office and no way to generate the waybill.
 
 = 1.0.1 =
 Recommended update. Fixes courier-switch issues when used alongside Drusoft Shipping for Speedy, keeps each courier's checkout selection separate, and corrects the Bulgarian courier name.
