@@ -125,8 +125,13 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 		}
 
 		/**
-		 * "25×17×2 см" per distinct product, comma-joined — the text the
+		 * "25x17x2 см" per distinct product, comma-joined — the text the
 		 * office reads. Whole centimetres are enough for a label.
+		 *
+		 * Plain ASCII "x" on purpose: the first live test (13.09.2026) used the
+		 * typographic "×" (U+00D7) and Econt's waybill PDF printed the contents
+		 * line BLANK — the character has no Windows-1251 code point, and the
+		 * whole line went with it. Cyrillic and ASCII print fine.
 		 *
 		 * @param WC_Product[] $products
 		 */
@@ -137,7 +142,7 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 				if ( ! $d ) {
 					continue;
 				}
-				$parts[] = sprintf( '%d×%d×%d см', round( $d[0] ), round( $d[1] ), round( $d[2] ) );
+				$parts[] = sprintf( '%dx%dx%d см', round( $d[0] ), round( $d[1] ), round( $d[2] ) );
 			}
 			return implode( ', ', array_unique( $parts ) );
 		}
@@ -155,7 +160,7 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 			if ( '' === $dims ) {
 				return mb_substr( $description, 0, $limit );
 			}
-			$suffix = ' · ' . $dims;
+			$suffix = ' - ' . $dims; // ASCII hyphen, see dims_text()
 			$room   = $limit - mb_strlen( $suffix );
 			if ( $room < 10 ) {
 				// A basket so varied that even the sizes do not fit — keep the
