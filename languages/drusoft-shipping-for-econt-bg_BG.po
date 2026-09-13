@@ -1,9 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Drusoft Shipping for Econt 1.0.1\n"
-"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/drusoft-shipping-"
-"for-econt\n"
-"POT-Creation-Date: 2026-05-24T11:57:33+00:00\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/drusoft-shipping-for-econt\n"
+"POT-Creation-Date: 2026-09-13T08:42:21+00:00\n"
 "PO-Revision-Date: 2023-10-27 12:00+0000\n"
 "Last-Translator: \n"
 "Language-Team: Bulgarian\n"
@@ -22,7 +21,7 @@ msgstr "Drusoft доставка за Еконт"
 #. Plugin URI of the plugin
 #: drusoft-shipping-for-econt.php
 msgid "https://github.com/ventzie555/drusoft-shipping-for-econt"
-msgstr ""
+msgstr "https://github.com/ventzie555/drusoft-shipping-for-econt"
 
 #. Description of the plugin
 #: drusoft-shipping-for-econt.php
@@ -37,325 +36,453 @@ msgstr "ДРУСОФТ ЕООД"
 #. Author URI of the plugin
 #: drusoft-shipping-for-econt.php
 msgid "https://drusoft.dev/"
-msgstr ""
+msgstr "https://drusoft.dev/"
 
 #: class-drushfe-shipping-method.php:27
 msgid "Fresh, conflict-free Econt delivery for Bulgaria."
 msgstr "Чиста, безконфликтна интеграция на Еконт за България."
 
-#: class-drushfe-shipping-method.php:49 class-drushfe-shipping-method.php:277
+#: class-drushfe-shipping-method.php:49 class-drushfe-shipping-method.php:434
 msgid "Econt Delivery"
 msgstr "Доставка със Еконт"
 
-#: class-drushfe-shipping-method.php:249
-msgid ""
-"Automats (APT/APS) cannot be used as sender drop-off offices. Please select "
-"a regular Econt office."
-msgstr ""
-"Автоматите (APT/APS) не могат да се използват като офиси за изпращане. Моля, "
-"изберете обикновен офис на Еконт.Автоматите (APT/APS) не могат да бъдат "
-"използвани като офиси за предаване. Моля, изберете обикновен офис на Еконт."
+#. translators: 1: courier name, 2: delivery destination such as "до офис 6307"
+#: class-drushfe-shipping-method.php:294
+#, php-format
+msgid "Цената за доставка не беше изчислена при поръчката: %1$s не върна цена и клиентът не е таксуван за доставка (%2$s). Проверете цената, преди да изпратите пратката."
+msgstr "Цената за доставка не беше изчислена при поръчката: %1$s не върна цена и клиентът не е таксуван за доставка (%2$s). Проверете цената, преди да изпратите пратката."
 
-#: class-drushfe-shipping-method.php:265
+#: class-drushfe-shipping-method.php:322
+msgid "Mixed pickup points — ships as separate parcels:"
+msgstr "Различни пунктове за изпращане — изпраща се като отделни пратки:"
+
+#: class-drushfe-shipping-method.php:323
+msgid "Mixed pickup points — consolidate before shipping:"
+msgstr "Различни пунктове за изпращане — обединете преди изпращане:"
+
+#: class-drushfe-shipping-method.php:406
+msgid "Automats (APT/APS) cannot be used as sender drop-off offices. Please select a regular Econt office."
+msgstr "Автоматите (APT/APS) не могат да се използват като офиси за изпращане. Моля, изберете обикновен офис на Еконт.Автоматите (APT/APS) не могат да бъдат използвани като офиси за предаване. Моля, изберете обикновен офис на Еконт."
+
+#: class-drushfe-shipping-method.php:422
 msgid "Econt API Connection"
 msgstr "Връзка с API на Еконт"
 
-#: class-drushfe-shipping-method.php:269
+#: class-drushfe-shipping-method.php:426
 msgid "Module Status"
 msgstr "Статус на модула"
 
-#: class-drushfe-shipping-method.php:271
+#: class-drushfe-shipping-method.php:428
 msgid "Enable/Disable"
 msgstr "Включване/Изключване"
 
-#: class-drushfe-shipping-method.php:275
+#: class-drushfe-shipping-method.php:432
 msgid "Method Title"
 msgstr "Заглавие на метода"
 
-#: class-drushfe-shipping-method.php:281
+#: class-drushfe-shipping-method.php:438
 msgid "Store ID"
 msgstr "Идентификатор на магазин"
 
-#: class-drushfe-shipping-method.php:283
+#: class-drushfe-shipping-method.php:440
 msgid "Your Econt client/shop ID number (used in Econt analytics)."
-msgstr ""
-"Вашият Еконт клиентски/магазинен идентификатор (използва се в Еконт "
-"анализите)."
+msgstr "Вашият Еконт клиентски/магазинен идентификатор (използва се в Еконт анализите)."
 
-#: class-drushfe-shipping-method.php:286
+#: class-drushfe-shipping-method.php:443
 msgid "Private Key"
 msgstr "Личен ключ"
 
-#: class-drushfe-shipping-method.php:288
+#: class-drushfe-shipping-method.php:445
 msgid "Issued by Econt for your delivery.econt.com account."
 msgstr "Издаден от Еконт за вашия акаунт в delivery.econt.com."
 
-#: class-drushfe-shipping-method.php:291
+#: class-drushfe-shipping-method.php:448
 msgid "Demo Mode"
 msgstr "Демо режим"
 
-#: class-drushfe-shipping-method.php:293
+#: class-drushfe-shipping-method.php:450
 msgid "Use Econt demo endpoints (delivery-demo.econt.com / demo.econt.com)."
-msgstr ""
-"Използвай демо адреси на Еконт (delivery-demo.econt.com / demo.econt.com)."
+msgstr "Използвай демо адреси на Еконт (delivery-demo.econt.com / demo.econt.com)."
 
-#: class-drushfe-shipping-method.php:304
+#: class-drushfe-shipping-method.php:461
 msgid "Please save your credentials to unlock shipping options."
 msgstr "Моля, запишете данните си, за да отключите опциите за доставка."
 
-#: class-drushfe-shipping-method.php:349
+#. translators: 1: date and time, 2: human-readable age such as "3 hours"
+#: class-drushfe-shipping-method.php:482
+#, php-format
+msgid "Last refreshed from Econt: %1$s (%2$s ago)."
+msgstr "Последно обновяване от Еконт: %1$s (преди %2$s)."
+
+#: class-drushfe-shipping-method.php:487
+msgid "That is more than 3 days — the daily refresh may not be running."
+msgstr "Това е преди повече от 3 дни — ежедневното обновяване може би не работи."
+
+#: class-drushfe-shipping-method.php:490
+msgid "Never refreshed on a schedule yet."
+msgstr "Все още не е обновявано по график."
+
+#. translators: %s: human-readable time until the next run, such as "5 hours"
+#: class-drushfe-shipping-method.php:495
+#, php-format
+msgid "Next refresh in %s."
+msgstr "Следващо обновяване след %s."
+
+#: class-drushfe-shipping-method.php:497
+msgid "No refresh is scheduled — it will be scheduled automatically on the next page load."
+msgstr "Няма насрочено обновяване — ще бъде насрочено автоматично при следващото зареждане на страница."
+
+#: class-drushfe-shipping-method.php:542
+msgid "Offices & cities"
+msgstr "Офиси и населени места"
+
+#: class-drushfe-shipping-method.php:549
 msgid "Sender Information"
 msgstr "Информация за подателя"
 
-#: class-drushfe-shipping-method.php:353
+#: class-drushfe-shipping-method.php:553
 msgid "Sender Client ID"
 msgstr "Идентификатор на изпращач"
 
-#: class-drushfe-shipping-method.php:355
-msgid ""
-"Your Econt client/contract ID — usually the same number as Store ID. Used as "
-"sender.clientId when creating waybills."
-msgstr ""
-"Вашият Еконт клиентски/договорен идентификатор — обикновено същият номер "
-"като Идентификатор на магазин. Използва се като sender.clientId при "
-"създаване на товарителници."
+#: class-drushfe-shipping-method.php:555
+msgid "Your Econt client/contract ID — usually the same number as Store ID. Used as sender.clientId when creating waybills."
+msgstr "Вашият Еконт клиентски/договорен идентификатор — обикновено същият номер като Идентификатор на магазин. Използва се като sender.clientId при създаване на товарителници."
 
-#: class-drushfe-shipping-method.php:360
+#: class-drushfe-shipping-method.php:560
 msgid "Contact Person"
 msgstr "Лице за контакт"
 
-#: class-drushfe-shipping-method.php:364
+#: class-drushfe-shipping-method.php:564
 msgid "Email"
 msgstr "Имейл"
 
-#: class-drushfe-shipping-method.php:368
+#: class-drushfe-shipping-method.php:568
 msgid "Phone Number"
 msgstr "Телефонен номер"
 
-#: class-drushfe-shipping-method.php:372
+#: class-drushfe-shipping-method.php:572
 msgid "City"
 msgstr "Град"
 
-#: class-drushfe-shipping-method.php:377
+#: class-drushfe-shipping-method.php:577
 msgid "Search for a city..."
 msgstr "Търсене на град..."
 
-#: class-drushfe-shipping-method.php:381
+#: class-drushfe-shipping-method.php:581
 msgid "Street"
 msgstr "Улица"
 
-#: class-drushfe-shipping-method.php:383
-msgid ""
-"Street name only — without the number. Example: \"ул. Кирил и Методий\". "
-"Must match one of your Econt-registered pickup addresses (\"Моите адреси\" "
-"in My Econt)."
-msgstr ""
-"Само името на улицата — без номера. Пример: „ул. Кирил и Методий“. Трябва да "
-"съвпада с някой от регистрираните ви адреси за вземане в Еконт („Моите "
-"адреси“ в My Econt)."
+#: class-drushfe-shipping-method.php:583
+msgid "Street name only — without the number. Example: \"ул. Кирил и Методий\". Must match one of your Econt-registered pickup addresses (\"Моите адреси\" in My Econt)."
+msgstr "Само името на улицата — без номера. Пример: „ул. Кирил и Методий“. Трябва да съвпада с някой от регистрираните ви адреси за вземане в Еконт („Моите адреси“ в My Econt)."
 
-#: class-drushfe-shipping-method.php:388
+#: class-drushfe-shipping-method.php:588
 msgid "Street Number"
 msgstr "Номер на улица"
 
-#: class-drushfe-shipping-method.php:390
+#: class-drushfe-shipping-method.php:590
 msgid "House/building number for the street above. Example: \"3\" or \"12А\"."
 msgstr "Номер на сграда/къща за горната улица. Пример: „3“ или „12А“."
 
-#: class-drushfe-shipping-method.php:395
+#: class-drushfe-shipping-method.php:595
 msgid "Send from Office"
 msgstr "Изпращане от офис"
 
-#: class-drushfe-shipping-method.php:399
+#: class-drushfe-shipping-method.php:599 class-drushfe-shipping-method.php:714
 msgid "No"
 msgstr "Не"
 
-#: class-drushfe-shipping-method.php:400
+#: class-drushfe-shipping-method.php:600
 msgid "Yes"
 msgstr "Да"
 
-#: class-drushfe-shipping-method.php:404
+#: class-drushfe-shipping-method.php:604
 msgid "Shipping from Office"
 msgstr "Изпращане от офис"
 
-#: class-drushfe-shipping-method.php:409
+#: class-drushfe-shipping-method.php:609
 msgid "Search for an office..."
 msgstr "Търсене на офис..."
 
-#: class-drushfe-shipping-method.php:413
+#: class-drushfe-shipping-method.php:613
 msgid "Latest Pickup Time"
 msgstr "Краен час за вземане"
 
-#: class-drushfe-shipping-method.php:418
-msgid ""
-"Format HH:MM. Latest time you can hand a shipment to an Econt courier. Econt "
-"enforces a per-city cut-off (typically 14:00–14:45) — values past that are "
-"rejected with \"Изберете кога да ви посети куриер…\". If you see that error, "
-"lower this value."
-msgstr ""
-"Формат ЧЧ:ММ. Най-късният час, в който можете да предадете пратка на куриер "
-"на Еконт. Еконт прилага краен срок според града (обикновено 14:00–14:45) — "
-"стойности след това се отхвърлят с „Изберете кога да ви посети куриер…“. Ако "
-"видите тази грешка, намалете стойността."
+#: class-drushfe-shipping-method.php:618
+msgid "Format HH:MM. Latest time you can hand a shipment to an Econt courier. Econt enforces a per-city cut-off (typically 14:00–14:45) — values past that are rejected with \"Изберете кога да ви посети куриер…\". If you see that error, lower this value."
+msgstr "Формат ЧЧ:ММ. Най-късният час, в който можете да предадете пратка на куриер на Еконт. Еконт прилага краен срок според града (обикновено 14:00–14:45) — стойности след това се отхвърлят с „Изберете кога да ви посети куриер…“. Ако видите тази грешка, намалете стойността."
 
-#: class-drushfe-shipping-method.php:423
+#: class-drushfe-shipping-method.php:627
+msgid "Additional Pickup Points"
+msgstr "Допълнителни пунктове за изпращане"
+
+#: class-drushfe-shipping-method.php:629
+msgid "Optional. Each pickup point is a separate \"Достави с Еконт\" store with its own sending address/office and connect code (create them at delivery.econt.com). The store configured above is always available as the \"default\" profile. Assign per product on its Shipping tab, or programmatically via the drushfe_pickup_profile filter."
+msgstr "По избор. Всеки пункт за изпращане е отделен магазин в „Достави с Еконт“ със собствен адрес или офис за изпращане и код за свързване (създават се в delivery.econt.com). Магазинът, настроен по-горе, винаги е наличен като профил „default“. Задава се за всеки продукт в таба „Доставка“ или програмно чрез филтъра drushfe_pickup_profile."
+
+#: class-drushfe-shipping-method.php:632
+msgid "Pickup Points"
+msgstr "Пунктове за изпращане"
+
+#: class-drushfe-shipping-method.php:636
+msgid "One per line: key | label | connect code (StoreID@key — the second store's \"Код за свързване\" from Достави с Еконт)."
+msgstr "По един на ред: ключ | име | код за свързване (StoreID@key — „Код за свързване“ на втория магазин от „Достави с Еконт“)."
+
+#: class-drushfe-shipping-method.php:639
+msgid "Default Pickup Point"
+msgstr "Пункт за изпращане по подразбиране"
+
+#: class-drushfe-shipping-method.php:646
+msgid "Used for products without an explicit pickup-point assignment."
+msgstr "Използва се за продукти без изрично зададен пункт за изпращане."
+
+#: class-drushfe-shipping-method.php:649
+msgid "Mixed-basket Handling"
+msgstr "Кошница от различни пунктове"
+
+#: class-drushfe-shipping-method.php:653
+msgid "Consolidate — one parcel from the default pickup point"
+msgstr "Обединяване — една пратка от пункта по подразбиране"
+
+#: class-drushfe-shipping-method.php:654
+msgid "Split — one parcel per pickup point (summed price, COD per parcel)"
+msgstr "Разделяне — по една пратка на пункт (обща цена, наложен платеж за всяка пратка)"
+
+#: class-drushfe-shipping-method.php:656
+msgid "What happens when basket items are assigned to different pickup points. Split keeps one courier and delivery point; the customer sees the parcel count and the summed delivery price."
+msgstr "Какво става, когато продуктите в кошницата са от различни пунктове за изпращане. При разделяне куриерът и мястото за доставка остават едни и същи; клиентът вижда броя пратки и общата цена за доставка."
+
+#: class-drushfe-shipping-method.php:661
 msgid "Shipment Settings"
 msgstr "Настройки на пратката"
 
-#: class-drushfe-shipping-method.php:427
+#: class-drushfe-shipping-method.php:665
 msgid "Default Weight (kg)"
 msgstr "Тегло по подразбиране (кг)"
 
-#: class-drushfe-shipping-method.php:430
+#: class-drushfe-shipping-method.php:668
 msgid "Fallback weight for products with no weight set, used by Econt pricing."
-msgstr ""
-"Резервно тегло за продукти без зададено тегло, използва се от Еконт "
-"ценообразуване."
+msgstr "Резервно тегло за продукти без зададено тегло, използва се от Еконт ценообразуване."
 
-#: class-drushfe-shipping-method.php:440
+#: class-drushfe-shipping-method.php:678
+msgid "Sizes on the Waybill"
+msgstr "Размери върху товарителницата"
+
+#: class-drushfe-shipping-method.php:680
+msgid "Add the product dimensions (L×W×H cm) to the shipment description."
+msgstr "Добавяне на размерите на продукта (Д×Ш×В см) в описанието на пратката."
+
+#: class-drushfe-shipping-method.php:682
+msgid "Makes the size visible on the waybill and in the Econt office. Uses the dimensions from each product's Shipping tab. Does not affect the price — Econt prices standard parcels by weight."
+msgstr "Размерите се виждат върху товарителницата и в офиса на Еконт. Взимат се от таба „Доставка“ на всеки продукт. Не влияе на цената — Еконт таксува стандартните пратки по тегло."
+
+#: class-drushfe-shipping-method.php:685
+msgid "Oversize Pricing"
+msgstr "Цена за извънгабаритни пратки"
+
+#: class-drushfe-shipping-method.php:687
+msgid "Price parcels with a side of 100 cm or more by their dimensions."
+msgstr "Пратки със страна 100 см или повече да се остойностяват по размерите им."
+
+#: class-drushfe-shipping-method.php:689
+msgid "Econt charges such parcels on its cargo tariff, which the standard quote cannot see. When enabled, the checkout price for those parcels is corrected using Econt's label API with the product dimensions. Requires the sender address or office above to be filled in. Parcels under 100 cm are never affected."
+msgstr "Еконт таксува такива пратки по карго тарифа, която стандартната калкулация не отчита. Когато е включено, цената при поръчка за тези пратки се коригира чрез API-то на Еконт за товарителници с размерите на продукта. Изисква попълнен адрес или офис на подателя по-горе. Пратки под 100 см никога не се засягат."
+
+#: class-drushfe-shipping-method.php:698
 msgid "Pricing & Payment"
 msgstr "Ценообразуване и плащане"
 
-#: class-drushfe-shipping-method.php:444
+#: class-drushfe-shipping-method.php:702
 msgid "Cash on Delivery"
 msgstr "Наложен платеж"
 
-#: class-drushfe-shipping-method.php:445
+#: class-drushfe-shipping-method.php:703
 msgid "Allow COD on Econt shipments"
 msgstr "Разреши Наложен платеж за Еконт пратки"
 
-#: class-drushfe-shipping-method.php:452
+#: class-drushfe-shipping-method.php:708
+msgid "Inspection before payment"
+msgstr "Преглед преди плащане"
+
+#: class-drushfe-shipping-method.php:711
+msgid "Let the recipient inspect (or test) the goods before paying the COD amount. Not available for Econtomat deliveries. Return shipment on refusal is at your expense."
+msgstr "Получателят може да прегледа (или тества) стоката, преди да плати наложения платеж. Не е налично за доставки до Еконтомат. Връщането при отказ е за ваша сметка."
+
+#: class-drushfe-shipping-method.php:715
+msgid "Inspection (open before payment)"
+msgstr "Преглед (отваряне преди плащане)"
+
+#: class-drushfe-shipping-method.php:716
+msgid "Inspection and test"
+msgstr "Преглед и тест"
+
+#: class-drushfe-shipping-method.php:722
 msgid "Workflow & Options"
 msgstr "Работен процес и опции"
 
-#: class-drushfe-shipping-method.php:456
+#: class-drushfe-shipping-method.php:726
 msgid "Automatic Waybill"
 msgstr "Автоматична товарителница"
 
-#: class-drushfe-shipping-method.php:457
-msgid ""
-"Automatically create the Econt waybill when the order moves to processing/on-"
-"hold."
-msgstr ""
-"Автоматично създай Еконт товарителница, когато поръчката премине в обработка/"
-"задържана."
+#: class-drushfe-shipping-method.php:727
+msgid "Automatically create the Econt waybill when the order moves to processing/on-hold."
+msgstr "Автоматично създай Еконт товарителница, когато поръчката премине в обработка/задържана."
 
-#: class-drushfe-shipping-method.php:524
+#: class-drushfe-shipping-method.php:794
 msgid "-- Select Office --"
 msgstr "-- Изберете офис --"
 
-#: class-drushfe-shipping-method.php:629
+#: class-drushfe-shipping-method.php:941
+msgid "Default store"
+msgstr "Магазин по подразбиране"
+
+#: class-drushfe-shipping-method.php:1043
 msgid "to address"
 msgstr "до адрес"
 
-#: class-drushfe-shipping-method.php:630
+#: class-drushfe-shipping-method.php:1044
 msgid "to office"
 msgstr "до офис"
 
-#: class-drushfe-shipping-method.php:631
+#: class-drushfe-shipping-method.php:1045
 msgid "to automat"
 msgstr "до автомат"
 
+#. translators: %d: number of parcels
+#: class-drushfe-shipping-method.php:1052
+#, php-format
+msgid "%d parcel"
+msgid_plural "%d parcels"
+msgstr[0] "%d пратка"
+msgstr[1] "%d пратки"
+
+#: drusoft-shipping-for-econt.php:529
 msgid "Delivery Method"
 msgstr "Начин на доставка"
 
-#: drusoft-shipping-for-econt.php:461
+#: drusoft-shipping-for-econt.php:530
 msgid "To Address"
 msgstr "До адрес"
 
-#: drusoft-shipping-for-econt.php:462
+#: drusoft-shipping-for-econt.php:531
 msgid "To Office"
 msgstr "До офис"
 
-#: drusoft-shipping-for-econt.php:463
+#: drusoft-shipping-for-econt.php:532
 msgid "To Automat"
 msgstr "До автомат"
 
-#: drusoft-shipping-for-econt.php:464
+#: drusoft-shipping-for-econt.php:533
 msgid "Select Office"
 msgstr "Изберете офис"
 
-#: drusoft-shipping-for-econt.php:465
+#: drusoft-shipping-for-econt.php:534
 msgid "Select Automat"
 msgstr "Изберете автомат"
 
-#: drusoft-shipping-for-econt.php:466
+#: drusoft-shipping-for-econt.php:535
 msgid "Select from Map"
 msgstr "Изберете от карта"
 
-#: drusoft-shipping-for-econt.php:467
+#: drusoft-shipping-for-econt.php:536
 msgid "Select a city..."
 msgstr "Изберете град..."
 
-#: drusoft-shipping-for-econt.php:468
+#: drusoft-shipping-for-econt.php:537
 msgid "Please select a city first."
 msgstr "Моля, първо изберете град."
 
-#: drusoft-shipping-for-econt.php:469
+#: drusoft-shipping-for-econt.php:538
 msgid "No results"
 msgstr "Няма резултати"
 
-#: drusoft-shipping-for-econt.php:470
+#: drusoft-shipping-for-econt.php:539
 msgid "Select Service"
 msgstr "Изберете услуга"
 
-#: drusoft-shipping-for-econt.php:471
+#: drusoft-shipping-for-econt.php:540
 msgid "Pick an Econt office or automat"
 msgstr "Изберете офис или автомат на Еконт"
 
-#: drusoft-shipping-for-econt.php:472
+#: drusoft-shipping-for-econt.php:541
 msgid "Pick an Econt office"
 msgstr "Изберете офис на Еконт"
 
-#: drusoft-shipping-for-econt.php:473
+#: drusoft-shipping-for-econt.php:542
 msgid "Pick an Econt automat"
 msgstr "Изберете автомат на Еконт"
 
-#: drusoft-shipping-for-econt.php:474
-msgid ""
-"Filter by type or search by city/name, click a marker, then choose "
-"\"Select\" in the popup."
-msgstr ""
-"Филтрирайте по тип или търсете по град/име, кликнете върху маркер и след "
-"това изберете „Изберете“ в изскачащия прозорец."
+#: drusoft-shipping-for-econt.php:543
+msgid "Filter by type or search by city/name, click a marker, then choose \"Select\" in the popup."
+msgstr "Филтрирайте по тип или търсете по град/име, кликнете върху маркер и след това изберете „Изберете“ в изскачащия прозорец."
 
-#: drusoft-shipping-for-econt.php:475
+#: drusoft-shipping-for-econt.php:544
 msgid "Select this point"
 msgstr "Изберете тази точка"
 
-#: drusoft-shipping-for-econt.php:476
+#: drusoft-shipping-for-econt.php:545
 msgid "Map could not be loaded:"
 msgstr "Картата не може да бъде заредена:"
 
-#: drusoft-shipping-for-econt.php:477
+#: drusoft-shipping-for-econt.php:546
 msgid "Offices"
 msgstr "Офиси"
 
-#: drusoft-shipping-for-econt.php:478
+#: drusoft-shipping-for-econt.php:547
 msgid "Automats"
 msgstr "Автомати"
 
-#: drusoft-shipping-for-econt.php:479
+#: drusoft-shipping-for-econt.php:548
 msgid "Both"
 msgstr "Двете"
 
-#: drusoft-shipping-for-econt.php:480
+#: drusoft-shipping-for-econt.php:549
 msgid "Search by city, office name, address…"
 msgstr "Търсене по град, име на офис, адрес…"
 
-#: drusoft-shipping-for-econt.php:481
+#: drusoft-shipping-for-econt.php:550
 msgid "{n} results"
 msgstr "{n} резултата"
 
-#: drusoft-shipping-for-econt.php:482
+#: drusoft-shipping-for-econt.php:551
 msgid "No matches"
 msgstr "Няма съвпадения"
 
-#: drusoft-shipping-for-econt.php:626
+#: drusoft-shipping-for-econt.php:707
 msgid "Please correct your credentials and save again."
 msgstr "Моля, коригирайте данните си и запишете отново."
 
-#: drusoft-shipping-for-econt.php:714 drusoft-shipping-for-econt.php:760
+#: drusoft-shipping-for-econt.php:816
+msgid "Econt automat"
+msgstr "Автомат на Еконт"
+
+#: drusoft-shipping-for-econt.php:817
+msgid "Econt office"
+msgstr "Офис на Еконт"
+
+#: drusoft-shipping-for-econt.php:821
+msgid "Office not found in local database — please sync offices."
+msgstr "Офисът не е намерен в локалната база — моля, синхронизирайте офисите."
+
+#: drusoft-shipping-for-econt.php:873 drusoft-shipping-for-econt.php:897
+#: drusoft-shipping-for-econt.php:901
+msgid "Parcel tracking"
+msgstr "Проследяване на пратката"
+
+#: drusoft-shipping-for-econt.php:874 drusoft-shipping-for-econt.php:898
+#: drusoft-shipping-for-econt.php:902
+msgid "Waybill number"
+msgstr "Номер на товарителница"
+
+#: drusoft-shipping-for-econt.php:875 drusoft-shipping-for-econt.php:903
+msgid "Track your parcel with Econt"
+msgstr "Проследи пратката при Еконт"
+
+#: drusoft-shipping-for-econt.php:897
+msgid "Econt"
+msgstr "Еконт"
+
+#: drusoft-shipping-for-econt.php:920 drusoft-shipping-for-econt.php:966
 #: includes/admin/class-drushfe-actions.php:26
 #: includes/admin/class-drushfe-actions.php:60
 #: includes/admin/class-drushfe-actions.php:134
@@ -364,51 +491,69 @@ msgstr "Моля, коригирайте данните си и запишете
 msgid "Permission denied."
 msgstr "Достъпът е отказан."
 
-#: drusoft-shipping-for-econt.php:788
+#: drusoft-shipping-for-econt.php:994
 msgid "Shipping method class not found."
 msgstr "Класът на метода за доставка не е намерен."
 
-#: drusoft-shipping-for-econt.php:940
+#: drusoft-shipping-for-econt.php:1060 drusoft-shipping-for-econt.php:1116
+msgid "Econt pickup point"
+msgstr "Пункт за изпращане с Еконт"
+
+#: drusoft-shipping-for-econt.php:1063
+msgid "Which Достави с Еконт store ships this product (e.g. a supplier warehouse for dropshipping)."
+msgstr "От кой магазин в „Достави с Еконт“ се изпраща продуктът (напр. склад на доставчик при дропшипинг)."
+
+#. translators: %d: number of parcels
+#: drusoft-shipping-for-econt.php:1099
+#, php-format
+msgid "Split shipment: %d parcels, one per pickup point (see order notes)."
+msgstr "Разделена доставка: %d пратки, по една на пункт за изпращане (вижте бележките към поръчката)."
+
+#: drusoft-shipping-for-econt.php:1129
+msgid "Mixed pickup points — items come from different origins; consolidate before creating the waybill (see order notes)."
+msgstr "Различни пунктове за изпращане — продуктите идват от различни места; обединете ги преди създаване на товарителница (вижте бележките към поръчката)."
+
+#: drusoft-shipping-for-econt.php:1267
 msgid "Missing region code"
 msgstr "Липсва код на регион"
 
-#: drusoft-shipping-for-econt.php:950
+#: drusoft-shipping-for-econt.php:1277
 msgid "Unknown region code"
 msgstr "Непознат код на област"
 
-#: drusoft-shipping-for-econt.php:988 drusoft-shipping-for-econt.php:1120
+#: drusoft-shipping-for-econt.php:1315 drusoft-shipping-for-econt.php:1447
 msgid "Missing city ID"
 msgstr "Липсва ID на град"
 
-#: drusoft-shipping-for-econt.php:1134
+#: drusoft-shipping-for-econt.php:1461
 msgid "City not found"
 msgstr "Градът не е намерен"
 
-#: drusoft-shipping-for-econt.php:1157
+#: drusoft-shipping-for-econt.php:1484
 msgid "Region mapping not found for: "
 msgstr "Не е намерено съответствие на регион за: "
 
-#: drusoft-shipping-for-econt.php:1341
+#: drusoft-shipping-for-econt.php:1668
 msgid "Please select a Econt office."
 msgstr "Моля, изберете офис на Еконт."
 
-#: drusoft-shipping-for-econt.php:1342
+#: drusoft-shipping-for-econt.php:1669
 msgid "Please select a Econt automat."
 msgstr "Моля, изберете автомат на Еконт."
 
-#: drusoft-shipping-for-econt.php:1403
+#: drusoft-shipping-for-econt.php:1730
 msgid "No cart session"
 msgstr "Няма сесия на количката"
 
-#: drusoft-shipping-for-econt.php:1433
+#: drusoft-shipping-for-econt.php:1786
 msgid "Econt private key not configured"
 msgstr "Личният ключ за Еконт не е конфигуриран"
 
-#: drusoft-shipping-for-econt.php:1550
+#: drusoft-shipping-for-econt.php:1922
 msgid "Pricing failed"
 msgstr "Изчисляването на цената не успя"
 
-#: drusoft-shipping-for-econt.php:1554
+#: drusoft-shipping-for-econt.php:1926
 msgid "No price returned by Econt"
 msgstr "Еконт не върна цена"
 
@@ -457,12 +602,8 @@ msgid "Shipment cancelled successfully."
 msgstr "Пратката е анулирана успешно."
 
 #: includes/admin/class-drushfe-actions.php:157
-msgid ""
-"This order has no Econt shipment number. Regenerate the waybill so createAWB "
-"can issue one, then try again."
-msgstr ""
-"Тази поръчка няма номер на пратка от Еконт. Регенерирайте товарителницата, "
-"така че createAWB да издаде такъв, и опитайте отново."
+msgid "This order has no Econt shipment number. Regenerate the waybill so createAWB can issue one, then try again."
+msgstr "Тази поръчка няма номер на пратка от Еконт. Регенерирайте товарителницата, така че createAWB да издаде такъв, и опитайте отново."
 
 #: includes/admin/class-drushfe-actions.php:300
 msgid "Econt courier request failed."
@@ -499,12 +640,8 @@ msgid "Courier requested successfully."
 msgstr "Куриерът е заявен успешно."
 
 #: includes/admin/class-drushfe-actions.php:373
-msgid ""
-"PDF URL is not available for this order. Regenerate the waybill to refresh "
-"it."
-msgstr ""
-"PDF връзката не е налична за тази поръчка. Регенерирайте товарителницата, за "
-"да я обновите."
+msgid "PDF URL is not available for this order. Regenerate the waybill to refresh it."
+msgstr "PDF връзката не е налична за тази поръчка. Регенерирайте товарителницата, за да я обновите."
 
 #: includes/admin/class-drushfe-actions.php:382
 msgid "Unexpected PDF host — refusing to redirect."
@@ -518,12 +655,12 @@ msgid "Econt Orders"
 msgstr "Еконт поръчки"
 
 #: includes/admin/class-drushfe-admin-menu.php:42
-#: includes/admin/class-drushfe-order-metabox.php:185
+#: includes/admin/class-drushfe-order-metabox.php:208
 msgid "Are you sure you want to cancel this shipment?"
 msgstr "Сигурни ли сте, че искате да анулирате тази пратка?"
 
 #: includes/admin/class-drushfe-admin-menu.php:43
-#: includes/admin/class-drushfe-order-metabox.php:187
+#: includes/admin/class-drushfe-order-metabox.php:210
 msgid "Requesting..."
 msgstr "Заявяване..."
 
@@ -533,13 +670,13 @@ msgid "Requested"
 msgstr "Заявено"
 
 #: includes/admin/class-drushfe-admin-menu.php:45
-#: includes/admin/class-drushfe-order-metabox.php:145
+#: includes/admin/class-drushfe-order-metabox.php:168
 #: includes/admin/class-drushfe-orders-list-table.php:393
 msgid "Request Courier"
 msgstr "Заяви куриер"
 
 #: includes/admin/class-drushfe-admin-menu.php:46
-#: includes/admin/class-drushfe-order-metabox.php:186
+#: includes/admin/class-drushfe-order-metabox.php:209
 msgid "Generating..."
 msgstr "Генериране..."
 
@@ -580,32 +717,38 @@ msgstr "Поръчка #%1$d — товарителница %2$s"
 msgid "Econt Shipment"
 msgstr "Еконт пратка"
 
-#: includes/admin/class-drushfe-order-metabox.php:130
+#. translators: %d: longest side of the parcel in cm
+#: includes/admin/class-drushfe-order-metabox.php:136
+#, php-format
+msgid "Oversize parcel (a side of %d cm). Econt prices parcels with a side of 100 cm or more on its cargo tariff, so the delivery quoted at checkout may be lower than what Econt charges."
+msgstr "Извънгабаритна пратка (страна %d см). Еконт таксува пратки със страна 100 см или повече по карго тарифа, затова цената за доставка при поръчката може да е по-ниска от таксата на Еконт."
+
+#: includes/admin/class-drushfe-order-metabox.php:153
 msgid "Waybill:"
 msgstr "Товарителница:"
 
-#: includes/admin/class-drushfe-order-metabox.php:137
+#: includes/admin/class-drushfe-order-metabox.php:160
 msgid "Print Waybill"
 msgstr "Печат на товарителница"
 
-#: includes/admin/class-drushfe-order-metabox.php:142
-#: includes/admin/class-drushfe-order-metabox.php:188
+#: includes/admin/class-drushfe-order-metabox.php:165
+#: includes/admin/class-drushfe-order-metabox.php:211
 msgid "Courier Requested"
 msgstr "Куриерът е заявен"
 
-#: includes/admin/class-drushfe-order-metabox.php:150
+#: includes/admin/class-drushfe-order-metabox.php:173
 msgid "Cancel Shipment"
 msgstr "Анулирай пратка"
 
-#: includes/admin/class-drushfe-order-metabox.php:155
+#: includes/admin/class-drushfe-order-metabox.php:178
 msgid "No waybill generated yet."
 msgstr "Все още няма генерирана товарителница."
 
-#: includes/admin/class-drushfe-order-metabox.php:157
+#: includes/admin/class-drushfe-order-metabox.php:180
 msgid "Generate Waybill"
 msgstr "Генерирай товарителница"
 
-#: includes/admin/class-drushfe-order-metabox.php:189
+#: includes/admin/class-drushfe-order-metabox.php:212
 msgid "Cancelling..."
 msgstr "Анулиране..."
 
@@ -666,9 +809,7 @@ msgstr "Поръчка #%d няма PDF URL — регенерирайте то�
 #: includes/admin/class-drushfe-orders-list-table.php:191
 #, php-format
 msgid "Order #%d: no AWB shipmentNumber (regenerate the waybill first)."
-msgstr ""
-"Поръчка #%d: липсва AWB номер на пратката (първо регенерирайте "
-"товарителницата)."
+msgstr "Поръчка #%d: липсва AWB номер на пратката (първо регенерирайте товарителницата)."
 
 #. translators: %s: Econt shipment number
 #: includes/admin/class-drushfe-orders-list-table.php:250
@@ -688,52 +829,42 @@ msgstr "Анулирай"
 msgid "Econt Sync Failed: Missing private key."
 msgstr "Еконт синхронизацията се провали: липсва личен ключ."
 
-#: includes/class-drushfe-waybill-generator.php:74
+#: includes/class-drushfe-waybill-generator.php:84
 msgid "Econt private key is not configured."
 msgstr "Личният ключ за Еконт не е конфигуриран."
 
-#: includes/class-drushfe-waybill-generator.php:162
-#: includes/class-drushfe-waybill-generator.php:171
-msgid "Econt Waybill Error: "
-msgstr "Грешка в товарителница на Еконт: "
-
-#: includes/class-drushfe-waybill-generator.php:170
+#: includes/class-drushfe-waybill-generator.php:258
 msgid "Unknown API error"
 msgstr "Неизвестна API грешка"
 
-#: includes/class-drushfe-waybill-generator.php:176
-msgid "Unexpected response from Econt API."
-msgstr "Неочакван отговор от API на Еконт."
+#: includes/class-drushfe-waybill-generator.php:260
+msgid "Econt Waybill Error: "
+msgstr "Грешка в товарителница на Еконт: "
 
-#: includes/class-drushfe-waybill-generator.php:212
+#. translators: 1: parcel number, 2: error message
+#: includes/class-drushfe-waybill-generator.php:264
+#, php-format
+msgid "Econt Waybill Error (parcel %1$d): %2$s — create it manually."
+msgstr "Грешка при товарителница на Еконт (пратка %1$d): %2$s — създайте я ръчно."
+
+#: includes/class-drushfe-waybill-generator.php:295
 msgid "Unknown error"
 msgstr "Непозната грешка"
 
-#: includes/class-drushfe-waybill-generator.php:213
+#: includes/class-drushfe-waybill-generator.php:296
 msgid "Econt createAWB warning: "
 msgstr "Предупреждение от createAWB на Еконт: "
 
-#: includes/class-drushfe-waybill-generator.php:218
+#: includes/class-drushfe-waybill-generator.php:310
 msgid "Econt Waybill Created: "
 msgstr "Създадена товарителница на Еконт: "
 
-msgid "Econt office"
-msgstr "Офис на Еконт"
+#. translators: 1: parcel number, 2: waybill id
+#: includes/class-drushfe-waybill-generator.php:313
+#, php-format
+msgid "Econt Waybill Created (parcel %1$d): %2$s"
+msgstr "Създадена товарителница на Еконт (пратка %1$d): %2$s"
 
-msgid "Office not found in local database — please sync offices."
-msgstr "Офисът не е намерен в локалната база — моля, синхронизирайте офисите."
-
-msgid "Econt automat"
-msgstr "Автомат на Еконт"
-
-msgid "Parcel tracking"
-msgstr "Проследяване на пратката"
-
-msgid "Waybill number"
-msgstr "Номер на товарителница"
-
-msgid "Track your parcel with Econt"
-msgstr "Проследи пратката при Еконт"
-
-msgid "Econt"
-msgstr "Еконт"
+#: includes/class-drushfe-waybill-generator.php:318
+msgid "Unexpected response from Econt API."
+msgstr "Неочакван отговор от API на Еконт."
