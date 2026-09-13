@@ -117,6 +117,29 @@ class Drushfe_Order_Metabox {
 		$waybill_id = $order->get_meta( '_drushfe_waybill_id' );
 		$courier_requested = ( 'yes' === $order->get_meta( '_drushfe_courier_requested' ) );
 
+		// Econt prices a parcel with a side of 100 cm or more on its cargo
+		// tariff; the standard quote is weight-only, so say so before the
+		// merchant hands it over expecting the checkout price.
+		if ( class_exists( 'Drushfe_Dimensions' ) ) {
+			$products = [];
+			foreach ( $order->get_items( 'line_item' ) as $item ) {
+				$p = $item->get_product();
+				if ( $p ) {
+					$products[] = $p;
+				}
+			}
+			$max_side = Drushfe_Dimensions::max_side_cm( $products );
+			if ( $max_side >= Drushfe_Dimensions::OVERSIZE_CM ) {
+				echo '<p style="margin:0 0 8px;padding:6px 8px;background:#fcf9e8;border-left:4px solid #dba617;">'
+					. esc_html( sprintf(
+						/* translators: %d: longest side of the parcel in cm */
+						__( 'Oversize parcel (a side of %d cm). Econt prices parcels with a side of 100 cm or more on its cargo tariff, so the delivery quoted at checkout may be lower than what Econt charges.', 'drusoft-shipping-for-econt' ),
+						round( $max_side )
+					) )
+					. '</p>';
+			}
+		}
+
 		echo '<div id="econt-metabox-content">';
 
 		if ( $waybill_id ) {

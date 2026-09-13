@@ -668,6 +668,26 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					'description' => __( 'Fallback weight for products with no weight set, used by Econt pricing.', 'drusoft-shipping-for-econt' ),
 					'custom_attributes' => [ 'step' => '0.01', 'min' => '0' ],
 				],
+				// Достави с Еконт carries no dimension fields, and Econt prices
+				// ordinary parcels by weight alone (measured 09.2026: 20×15×5 and
+				// 90×90×90 cm cost the same at equal weight). Size only starts to
+				// matter from a side of ~100 cm, when the cargo tariff applies.
+				// Both options below are off by default and change nothing for
+				// parcels under that size.
+				'dims_in_description' => [
+					'title'       => __( 'Sizes on the Waybill', 'drusoft-shipping-for-econt' ),
+					'type'        => 'checkbox',
+					'label'       => __( 'Add the product dimensions (L×W×H cm) to the shipment description.', 'drusoft-shipping-for-econt' ),
+					'default'     => 'no',
+					'description' => __( 'Makes the size visible on the waybill and in the Econt office. Uses the dimensions from each product\'s Shipping tab. Does not affect the price — Econt prices standard parcels by weight.', 'drusoft-shipping-for-econt' ),
+				],
+				'oversize_quote' => [
+					'title'       => __( 'Oversize Pricing', 'drusoft-shipping-for-econt' ),
+					'type'        => 'checkbox',
+					'label'       => __( 'Price parcels with a side of 100 cm or more by their dimensions.', 'drusoft-shipping-for-econt' ),
+					'default'     => 'no',
+					'description' => __( 'Econt charges such parcels on its cargo tariff, which the standard quote cannot see. When enabled, the checkout price for those parcels is corrected using Econt\'s label API with the product dimensions. Requires the sender address or office above to be filled in. Parcels under 100 cm are never affected.', 'drusoft-shipping-for-econt' ),
+				],
 
 				// --- SECTION: PRICING & PAYMENT ---
 				// v0.1: Econt-Calculator-only. Shipping cost comes live from

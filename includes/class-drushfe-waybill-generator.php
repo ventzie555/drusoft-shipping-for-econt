@@ -155,6 +155,7 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				$parcel_no++;
 				$g_payload  = $payload;
 				$items_desc = [];
+				$g_products = [];
 				foreach ( $order->get_items( 'line_item' ) as $item ) {
 					$product = $item->get_product();
 					if ( ! $product ) {
@@ -173,6 +174,7 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					}
 
 					$name = $product->get_name();
+					$g_products[] = $product;
 					$g_payload['items'][] = [
 						'name'        => $name,
 						'SKU'         => $product->get_sku(),
@@ -221,7 +223,13 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					}
 				}
 
-				$g_payload['shipmentDescription'] = mb_substr( implode( ', ', $items_desc ), 0, 100 );
+				// Optionally print the product sizes into the description — the
+				// only place Достави с Еконт lets them reach the waybill and the
+				// office (its Order object has no dimension fields). Cosmetic:
+				// Econt never prices this text. See Drushfe_Dimensions.
+				$g_payload['shipmentDescription'] = ( 'yes' === ( $settings['dims_in_description'] ?? 'no' ) && class_exists( 'Drushfe_Dimensions' ) )
+					? Drushfe_Dimensions::describe( implode( ', ', $items_desc ), $g_products )
+					: mb_substr( implode( ', ', $items_desc ), 0, 100 );
 				if ( $is_split ) {
 					// each store needs its own unique order number
 					$g_payload['orderNumber'] = $order_id . '-' . $parcel_no;

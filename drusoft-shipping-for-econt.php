@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.9
+ * Version:     1.0.10
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '1.0.9' );
+define( 'DRUSHFE_VER',  '1.0.10' );
 
 /**
  * Load Dependencies
@@ -65,6 +65,7 @@ function drushfe_load_dependencies(): void {
 	require_once DRUSHFE_PATH . 'class-drushfe-shipping-method.php';
 	require_once DRUSHFE_PATH . 'includes/class-drushfe-syncer.php';
 	require_once DRUSHFE_PATH . 'includes/class-drushfe-waybill-generator.php';
+	require_once DRUSHFE_PATH . 'includes/class-drushfe-dimensions.php';
 	require_once DRUSHFE_PATH . 'includes/admin/class-drushfe-admin-menu.php';
 	require_once DRUSHFE_PATH . 'includes/admin/class-drushfe-actions.php';
 	require_once DRUSHFE_PATH . 'includes/admin/class-drushfe-order-metabox.php';
@@ -1866,6 +1867,7 @@ function drushfe_calculate_price_ajax(): void {
 	foreach ( $group_defs as $g_key => $g_ids ) {
 		$g_payload  = $payload;
 		$items_desc = [];
+		$g_products = [];
 		foreach ( WC()->cart->get_cart() as $cart_item ) {
 			$pid = (int) ( $cart_item['variation_id'] ?: $cart_item['product_id'] );
 			if ( null !== $g_ids && ! in_array( $pid, (array) $g_ids, true ) ) {
@@ -1879,6 +1881,7 @@ function drushfe_calculate_price_ajax(): void {
 				$weight = (float) ( $settings['teglo'] ?? 0.5 );
 			}
 			$name = $product->get_name();
+			$g_products[] = $product;
 
 			$g_payload['items'][] = [
 				'name'        => $name,
@@ -1924,6 +1927,34 @@ function drushfe_calculate_price_ajax(): void {
 		}
 
 		$price += (float) $body['receiverDueAmount'];
+
+		// Oversize parcels (any side ≥ 100 cm) are priced by size, which the
+		// Достави с Еконт quote cannot see. Opt-in ("oversize_quote"); adds
+		// 0.00 unless the setting is on, the parcel really is oversize and
+		// Econt's size-aware price is higher. See Drushfe_Dimensions.
+		if ( class_exists( 'Drushfe_Dimensions' ) ) {
+			$g_weight = 0.0;
+			$g_sum    = 0.0;
+			foreach ( $g_payload['items'] as $g_item ) {
+				$g_weight += (float) $g_item['totalWeight'];
+				$g_sum    += (float) $g_item['totalPrice'];
+			}
+			$price += Drushfe_Dimensions::oversize_adjustment(
+				(array) $settings,
+				$g_auth,
+				$body,
+				$g_products,
+				[
+					'weight'        => $g_weight,
+					'cod'           => $cod,
+					'cod_amount'    => $g_sum,
+					'currency'      => get_woocommerce_currency(),
+					'customer'      => $g_payload['customerInfo'],
+					'delivery_type' => $delivery_type,
+					'description'   => $g_payload['shipmentDescription'],
+				]
+			);
+		}
 	}
 
 	// Race guard: only overwrite the session price if this response is for the
