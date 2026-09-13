@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Drusoft Shipping for Econt 1.0.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/drusoft-shipping-for-econt\n"
-"POT-Creation-Date: 2026-09-13T08:42:21+00:00\n"
+"POT-Creation-Date: 2026-09-13T09:00:04+00:00\n"
 "PO-Revision-Date: 2023-10-27 12:00+0000\n"
 "Last-Translator: \n"
 "Language-Team: Bulgarian\n"
@@ -655,12 +655,12 @@ msgid "Econt Orders"
 msgstr "Еконт поръчки"
 
 #: includes/admin/class-drushfe-admin-menu.php:42
-#: includes/admin/class-drushfe-order-metabox.php:208
+#: includes/admin/class-drushfe-order-metabox.php:219
 msgid "Are you sure you want to cancel this shipment?"
 msgstr "Сигурни ли сте, че искате да анулирате тази пратка?"
 
 #: includes/admin/class-drushfe-admin-menu.php:43
-#: includes/admin/class-drushfe-order-metabox.php:210
+#: includes/admin/class-drushfe-order-metabox.php:228
 msgid "Requesting..."
 msgstr "Заявяване..."
 
@@ -670,13 +670,14 @@ msgid "Requested"
 msgstr "Заявено"
 
 #: includes/admin/class-drushfe-admin-menu.php:45
-#: includes/admin/class-drushfe-order-metabox.php:168
+#: includes/admin/class-drushfe-order-metabox.php:179
+#: includes/admin/class-drushfe-order-metabox.php:224
 #: includes/admin/class-drushfe-orders-list-table.php:393
 msgid "Request Courier"
 msgstr "Заяви куриер"
 
 #: includes/admin/class-drushfe-admin-menu.php:46
-#: includes/admin/class-drushfe-order-metabox.php:209
+#: includes/admin/class-drushfe-order-metabox.php:227
 msgid "Generating..."
 msgstr "Генериране..."
 
@@ -718,37 +719,44 @@ msgid "Econt Shipment"
 msgstr "Еконт пратка"
 
 #. translators: %d: longest side of the parcel in cm
-#: includes/admin/class-drushfe-order-metabox.php:136
+#: includes/admin/class-drushfe-order-metabox.php:142
 #, php-format
-msgid "Oversize parcel (a side of %d cm). Econt prices parcels with a side of 100 cm or more on its cargo tariff, so the delivery quoted at checkout may be lower than what Econt charges."
-msgstr "Извънгабаритна пратка (страна %d см). Еконт таксува пратки със страна 100 см или повече по карго тарифа, затова цената за доставка при поръчката може да е по-ниска от таксата на Еконт."
+msgid "Oversize parcel (a side of %d cm). Econt charges parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over."
+msgstr "Извънгабаритна пратка (страна %d см). Еконт таксува пратки със страна от 100 см по карго тарифа — проверете цената за доставка, преди да я предадете."
 
-#: includes/admin/class-drushfe-order-metabox.php:153
+#: includes/admin/class-drushfe-order-metabox.php:146
+msgid "Turn on \"Oversize Pricing\" in the Econt settings to price such parcels at checkout."
+msgstr "Включете „Цена за извънгабаритни пратки“ в настройките на Еконт, за да се изчисляват такива пратки при поръчка."
+
+#: includes/admin/class-drushfe-order-metabox.php:164
 msgid "Waybill:"
 msgstr "Товарителница:"
 
-#: includes/admin/class-drushfe-order-metabox.php:160
+#: includes/admin/class-drushfe-order-metabox.php:171
 msgid "Print Waybill"
 msgstr "Печат на товарителница"
 
-#: includes/admin/class-drushfe-order-metabox.php:165
-#: includes/admin/class-drushfe-order-metabox.php:211
+#: includes/admin/class-drushfe-order-metabox.php:176
+#: includes/admin/class-drushfe-order-metabox.php:229
 msgid "Courier Requested"
 msgstr "Куриерът е заявен"
 
-#: includes/admin/class-drushfe-order-metabox.php:173
+#: includes/admin/class-drushfe-order-metabox.php:184
+#: includes/admin/class-drushfe-order-metabox.php:225
 msgid "Cancel Shipment"
 msgstr "Анулирай пратка"
 
-#: includes/admin/class-drushfe-order-metabox.php:178
+#: includes/admin/class-drushfe-order-metabox.php:189
+#: includes/admin/class-drushfe-order-metabox.php:226
 msgid "No waybill generated yet."
 msgstr "Все още няма генерирана товарителница."
 
-#: includes/admin/class-drushfe-order-metabox.php:180
+#: includes/admin/class-drushfe-order-metabox.php:191
+#: includes/admin/class-drushfe-order-metabox.php:223
 msgid "Generate Waybill"
 msgstr "Генерирай товарителница"
 
-#: includes/admin/class-drushfe-order-metabox.php:212
+#: includes/admin/class-drushfe-order-metabox.php:230
 msgid "Cancelling..."
 msgstr "Анулиране..."
 

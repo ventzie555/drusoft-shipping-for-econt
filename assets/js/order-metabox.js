@@ -31,7 +31,7 @@ jQuery(document).ready(function($) {
                     location.reload();
                 } else {
                     showMetaboxNotice(response.data, 'error');
-                    button.text('Generate Waybill').prop('disabled', false);
+                    button.text(params.i18n.generate_waybill).prop('disabled', false);
                 }
             }
         });
@@ -62,7 +62,7 @@ jQuery(document).ready(function($) {
                     showMetaboxNotice(response.data, 'success');
                 } else {
                     showMetaboxNotice(response.data, 'error');
-                    button.text('Request Courier').prop('disabled', false);
+                    button.text(params.i18n.request_courier).prop('disabled', false);
                 }
             }
         });
@@ -93,14 +93,14 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     // Replace metabox content with Generate button
                     $content.html(
-                        '<p>No waybill generated yet.</p>' +
+                        '<p>' + params.i18n.no_waybill + '</p>' +
                         '<button type="button" class="button button-primary econt-order-generate" data-order-id="' + orderId + '">' +
-                        'Generate Waybill</button>'
+                        params.i18n.generate_waybill + '</button>'
                     );
                     showMetaboxNotice(response.data, 'success');
                 } else {
                     showMetaboxNotice(response.data, 'error');
-                    button.text('Cancel Shipment').prop('disabled', false);
+                    button.text(params.i18n.cancel_shipment).prop('disabled', false);
                 }
             }
         });

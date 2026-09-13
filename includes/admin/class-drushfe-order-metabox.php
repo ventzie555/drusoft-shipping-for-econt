@@ -118,8 +118,11 @@ class Drushfe_Order_Metabox {
 		$courier_requested = ( 'yes' === $order->get_meta( '_drushfe_courier_requested' ) );
 
 		// Econt prices a parcel with a side of 100 cm or more on its cargo
-		// tariff; the standard quote is weight-only, so say so before the
-		// merchant hands it over expecting the checkout price.
+		// tariff. Say what is true in EVERY case — this parcel costs cargo
+		// rates — rather than claiming the checkout quote was low: with
+		// "Oversize Pricing" on it was corrected, except where that step is
+		// skipped (merchant-pays stores, Econt not answering, no sender set).
+		// Only when the option is off, point at it.
 		if ( class_exists( 'Drushfe_Dimensions' ) ) {
 			$products = [];
 			foreach ( $order->get_items( 'line_item' ) as $item ) {
@@ -130,12 +133,20 @@ class Drushfe_Order_Metabox {
 			}
 			$max_side = Drushfe_Dimensions::max_side_cm( $products );
 			if ( $max_side >= Drushfe_Dimensions::OVERSIZE_CM ) {
+				$ship_methods = $order->get_shipping_methods();
+				$ship_method  = reset( $ship_methods );
+				$settings     = $ship_method ? (array) get_option( 'woocommerce_drushfe_econt_' . $ship_method->get_instance_id() . '_settings', [] ) : [];
+
+				$text = sprintf(
+					/* translators: %d: longest side of the parcel in cm */
+					__( 'Oversize parcel (a side of %d cm). Econt charges parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over.', 'drusoft-shipping-for-econt' ),
+					round( $max_side )
+				);
+				if ( 'yes' !== ( $settings['oversize_quote'] ?? 'no' ) ) {
+					$text .= ' ' . __( 'Turn on "Oversize Pricing" in the Econt settings to price such parcels at checkout.', 'drusoft-shipping-for-econt' );
+				}
 				echo '<p style="margin:0 0 8px;padding:6px 8px;background:#fcf9e8;border-left:4px solid #dba617;">'
-					. esc_html( sprintf(
-						/* translators: %d: longest side of the parcel in cm */
-						__( 'Oversize parcel (a side of %d cm). Econt prices parcels with a side of 100 cm or more on its cargo tariff, so the delivery quoted at checkout may be lower than what Econt charges.', 'drusoft-shipping-for-econt' ),
-						round( $max_side )
-					) )
+					. esc_html( $text )
 					. '</p>';
 			}
 		}
@@ -206,6 +217,13 @@ class Drushfe_Order_Metabox {
 			'nonce'    => wp_create_nonce( 'drushfe_actions' ),
 			'i18n'     => [
 				'confirm_cancel'    => __( 'Are you sure you want to cancel this shipment?', 'drusoft-shipping-for-econt' ),
+				// The labels the JS redraws after an action. They were string
+				// literals in order-metabox.js, so after "Cancel Shipment" a
+				// Bulgarian admin saw an English box. Same msgids as render().
+				'generate_waybill'  => __( 'Generate Waybill', 'drusoft-shipping-for-econt' ),
+				'request_courier'   => __( 'Request Courier', 'drusoft-shipping-for-econt' ),
+				'cancel_shipment'   => __( 'Cancel Shipment', 'drusoft-shipping-for-econt' ),
+				'no_waybill'        => __( 'No waybill generated yet.', 'drusoft-shipping-for-econt' ),
 				'generating'        => __( 'Generating...', 'drusoft-shipping-for-econt' ),
 				'requesting'        => __( 'Requesting...', 'drusoft-shipping-for-econt' ),
 				'courier_requested' => __( 'Courier Requested', 'drusoft-shipping-for-econt' ),

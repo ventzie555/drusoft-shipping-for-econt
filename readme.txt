@@ -148,7 +148,9 @@ The plugin minimizes API calls through several strategies:
 = 1.0.10 =
 * New (off by default): "Sizes on the Waybill" — adds each product's dimensions (L×W×H cm, from its Shipping tab) to the shipment description, so the size is visible on the waybill and in the Econt office. Достави с Еконт has no dimension fields of its own, and Econt prices standard parcels by weight alone, so this is informational and changes no price.
 * New (off by default): "Oversize Pricing" — parcels with a side of 100 cm or more are priced by Econt on its cargo tariff, which the standard quote cannot see (measured: a 0.7 kg parcel costs the same in a 20×15×5 and a 90×90×90 cm box, and several times more from 100 cm). When enabled, the checkout price for such parcels is corrected through Econt's label API using the product dimensions; who pays the delivery is preserved. Parcels under 100 cm are never touched, and if Econt does not answer the price stays as before. Requires the sender address or office in the settings.
-* New: the order screen warns when a parcel has a side of 100 cm or more, so the merchant knows the checkout quote may be below Econt's charge before handing it over.
+* New: the order screen marks parcels with a side of 100 cm or more, which Econt charges on its cargo tariff, so the delivery cost can be checked before handing the parcel over; when "Oversize Pricing" is off it also points to that option.
+* Fixed: after cancelling a shipment (or a failed action) the Econt box on the order screen redrew its buttons in English on non-English admins.
+* Improved: the Bulgarian translation now covers every admin string (pickup points, refresh status, inspection before payment, dimensions).
 
 = 1.0.9 =
 * New: when an order is placed but the delivery price could not be calculated (Econt did not answer), the order is still accepted — you should not lose the sale — and an order note now tells you so, with the chosen office, so you see it in the order history before shipping. Previously such an order arrived with a 0.00 shipping line and nothing explaining why.
