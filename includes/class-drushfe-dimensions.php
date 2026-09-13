@@ -16,12 +16,20 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 	 * office could not see them (12.09.2026).
 	 *
 	 * Measured against Econt's live pricing (LabelService.createLabel in
-	 * `calculate` mode, ~30 calls, 12–13.09.2026): a standard parcel is priced
+	 * `calculate` mode, ~50 calls, 12–13.09.2026): a standard parcel is priced
 	 * by WEIGHT ALONE — 20×15×5 and 90×90×90 cm at the same weight cost the same
-	 * — and size only starts to matter once a side reaches ~100 cm, when the
-	 * parcel flips to a cargo tariff (0.7 kg: 4.79 € in a 90×90×90 box, 30.94 €
-	 * in a 100×100×100 one). The `sizeUnder60cm` flag and per-pack `packs[]`
-	 * dimensions changed nothing; only the top-level shipmentDimensionsL/W/H did.
+	 * — and size only starts to matter once the length reaches 100 cm. From
+	 * there the size price grows with length × height (0.7 kg from office 6304:
+	 * 4.03 € plain, 100×20×20 5.39 €, 100×50×50 13.47 €, 100×100×100 26.94 €;
+	 * a flat 110×65×12 still 4.03 €), and Econt charges whichever of the weight
+	 * price and the size price is higher. The `sizeUnder60cm` flag and per-pack
+	 * `packs[]` dimensions changed nothing; only shipmentDimensionsL/W/H did.
+	 *
+	 * The two Econt APIs do NOT total the same way (with COD the label API
+	 * adds fees the Достави с Еконт quote leaves to the merchant), so the size
+	 * effect is measured INSIDE the label API — the same parcel priced without
+	 * and with its dimensions — and only that ratio is applied to the
+	 * customer's share from the store quote.
 	 *
 	 * Hence two small, opt-in things, both default OFF:
 	 *   1. dims_in_description — print "Д×Ш×В см" into the shipment description
@@ -220,14 +228,20 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 					// price cannot be scaled from nothing, so leave it alone.
 					return $unpriced;
 				}
-				$sized = self::quote_total( $settings, $auth, $products, $ctx );
-				if ( null === $sized ) {
+				// Same API, same parcel, without and with its size: the ratio is
+				// the size effect and nothing else. Comparing the sized label
+				// price with the store quote instead would charge the customer
+				// for fee differences between the two APIs (a COD parcel: 12.92
+				// vs 7.98 € for the SAME box, measured 13.09.2026).
+				$unsized = self::quote_total( $settings, $auth, $products, $ctx, false );
+				$sized   = self::quote_total( $settings, $auth, $products, $ctx, true );
+				if ( null === $unsized || null === $sized ) {
 					return $unpriced;
 				}
-				if ( $sized <= $total ) {
+				if ( $sized <= $unsized ) {
 					return [ 'amount' => 0.0, 'priced' => true ];
 				}
-				return [ 'amount' => round( $receiver * ( $sized / $total - 1 ), 2 ), 'priced' => true ];
+				return [ 'amount' => round( $receiver * ( $sized / $unsized - 1 ), 2 ), 'priced' => true ];
 			} catch ( \Throwable $e ) {
 				return $unpriced;
 			}
@@ -262,15 +276,17 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 		}
 
 		/**
-		 * Econt's total price for this parcel WITH its dimensions, via
-		 * LabelService.createLabel in `calculate` mode — nothing is created.
+		 * Econt's total price for this parcel, with or without its dimensions,
+		 * via LabelService.createLabel in `calculate` mode — nothing is created.
 		 * The Достави с Еконт connect key is accepted by that service (verified
 		 * 12.09.2026); it only insists on a sender address or office, which the
 		 * plugin settings already hold.
 		 *
+		 * @param bool $with_dims Send shipmentDimensionsL/W/H (the size price)
+		 *                        or leave them out (the weight price).
 		 * @return float|null totalPrice, or null when it cannot be determined.
 		 */
-		public static function quote_total( array $settings, string $auth, array $products, array $ctx ): ?float {
+		public static function quote_total( array $settings, string $auth, array $products, array $ctx, bool $with_dims = true ): ?float {
 			$box = self::bounding_box_cm( $products );
 			if ( ! $box || '' === $auth ) {
 				return null;
@@ -288,11 +304,13 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 				'packCount'           => 1,
 				'shipmentType'        => 'pack',
 				'weight'              => max( 0.1, (float) ( $ctx['weight'] ?? 0 ) ),
-				'shipmentDimensionsL' => $box[0],
-				'shipmentDimensionsW' => $box[1],
-				'shipmentDimensionsH' => $box[2],
 				'shipmentDescription' => mb_substr( (string) ( $ctx['description'] ?? '' ), 0, 100 ),
 			];
+			if ( $with_dims ) {
+				$label['shipmentDimensionsL'] = $box[0];
+				$label['shipmentDimensionsW'] = $box[1];
+				$label['shipmentDimensionsH'] = $box[2];
+			}
 
 			// Sender: the same origin the waybill will ship from.
 			if ( 'YES' === ( $settings['sender_officeyesno'] ?? 'NO' ) && ! empty( $settings['sender_office'] ) ) {

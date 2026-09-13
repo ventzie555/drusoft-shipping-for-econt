@@ -721,8 +721,8 @@ msgstr "Еконт пратка"
 #. translators: %d: longest side of the parcel in cm
 #: includes/admin/class-drushfe-order-metabox.php:142
 #, php-format
-msgid "Oversize parcel (a side of %d cm). Econt charges parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over."
-msgstr "Извънгабаритна пратка (страна %d см). Еконт таксува пратки със страна от 100 см по карго тарифа — проверете цената за доставка, преди да я предадете."
+msgid "Oversize parcel (a side of %d cm). Econt may charge parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over."
+msgstr "Извънгабаритна пратка (страна %d см). Еконт може да таксува пратки със страна от 100 см по карго тарифа — проверете цената за доставка, преди да я предадете."
 
 #: includes/admin/class-drushfe-order-metabox.php:146
 msgid "Turn on \"Oversize Pricing\" in the Econt settings to price such parcels at checkout."

@@ -142,7 +142,7 @@ class Drushfe_Order_Metabox {
 
 				$text = sprintf(
 					/* translators: %d: longest side of the parcel in cm */
-					__( 'Oversize parcel (a side of %d cm). Econt charges parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over.', 'drusoft-shipping-for-econt' ),
+					__( 'Oversize parcel (a side of %d cm). Econt may charge parcels with a side of 100 cm or more on its cargo tariff — check the delivery cost before handing it over.', 'drusoft-shipping-for-econt' ),
 					round( $max_side )
 				);
 				if ( 'yes' !== ( $settings['oversize_quote'] ?? 'no' ) ) {
