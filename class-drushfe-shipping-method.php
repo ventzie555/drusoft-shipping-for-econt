@@ -98,6 +98,14 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			// this flag before 2026-08-20.
 			$order->update_meta_data( '_drushfe_econt_order', 1 );
 
+			// Oversize parcels priced by their dimensions at checkout: keep the
+			// fingerprint of the priced basket, but only while it is still the
+			// basket being ordered. The order screen stays quiet for these.
+			$oversize_priced = class_exists( 'Drushfe_Dimensions' ) ? (string) WC()->session->get( 'drushfe_oversize_priced', '' ) : '';
+			if ( '' !== $oversize_priced && Drushfe_Dimensions::order_signature( $order ) === $oversize_priced ) {
+				$order->update_meta_data( '_drushfe_oversize_priced', $oversize_priced );
+			}
+
 			// Record the resolved pickup profile: the admin order screen can
 			// override it before the waybill is generated.
 			// This hook fires on EVERY instantiation of the method (including

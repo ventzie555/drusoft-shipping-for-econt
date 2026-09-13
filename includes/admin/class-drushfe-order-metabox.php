@@ -118,10 +118,11 @@ class Drushfe_Order_Metabox {
 		$courier_requested = ( 'yes' === $order->get_meta( '_drushfe_courier_requested' ) );
 
 		// Econt prices a parcel with a side of 100 cm or more on its cargo
-		// tariff. Say what is true in EVERY case — this parcel costs cargo
-		// rates — rather than claiming the checkout quote was low: with
-		// "Oversize Pricing" on it was corrected, except where that step is
-		// skipped (merchant-pays stores, Econt not answering, no sender set).
+		// tariff, and neither the standard quote nor the waybill carries a size.
+		// Warn — unless checkout priced exactly these items by their dimensions
+		// ("Oversize Pricing" on and it worked). It stays up when that step was
+		// skipped (merchant pays, Econt not answering, no sender set), for
+		// orders entered in the admin, and once the items are edited afterwards.
 		// Only when the option is off, point at it.
 		if ( class_exists( 'Drushfe_Dimensions' ) ) {
 			$products = [];
@@ -132,7 +133,9 @@ class Drushfe_Order_Metabox {
 				}
 			}
 			$max_side = Drushfe_Dimensions::max_side_cm( $products );
-			if ( $max_side >= Drushfe_Dimensions::OVERSIZE_CM ) {
+			$priced   = (string) $order->get_meta( '_drushfe_oversize_priced' );
+			$settled  = '' !== $priced && Drushfe_Dimensions::order_signature( $order ) === $priced;
+			if ( $max_side >= Drushfe_Dimensions::OVERSIZE_CM && ! $settled ) {
 				$ship_methods = $order->get_shipping_methods();
 				$ship_method  = reset( $ship_methods );
 				$settings     = $ship_method ? (array) get_option( 'woocommerce_drushfe_econt_' . $ship_method->get_instance_id() . '_settings', [] ) : [];

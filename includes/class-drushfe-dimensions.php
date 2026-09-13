@@ -191,28 +191,74 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 		 *                                 delivery_type, description.
 		 */
 		public static function oversize_adjustment( array $settings, string $auth, array $quote, array $products, array $ctx ): float {
+			return self::oversize_check( $settings, $auth, $quote, $products, $ctx )['amount'];
+		}
+
+		/**
+		 * oversize_adjustment() together with its verdict. `priced` is true only
+		 * when Econt priced this parcel WITH its dimensions and the customer's
+		 * share reflects that — raised, or already at least that high. Every case
+		 * in which the price was left alone for lack of certainty (setting off,
+		 * merchant pays, no sender, Econt did not answer) is `priced` false, and
+		 * that is what keeps the order-screen warning up for those orders.
+		 *
+		 * @return array{amount: float, priced: bool}
+		 */
+		public static function oversize_check( array $settings, string $auth, array $quote, array $products, array $ctx ): array {
+			$unpriced = [ 'amount' => 0.0, 'priced' => false ];
 			try {
 				if ( 'yes' !== ( $settings['oversize_quote'] ?? 'no' ) ) {
-					return 0.0;
+					return $unpriced;
 				}
 				if ( self::max_side_cm( $products ) < self::OVERSIZE_CM ) {
-					return 0.0;
+					return $unpriced;
 				}
 				$total    = (float) ( $quote['totalPrice'] ?? 0 );
 				$receiver = (float) ( $quote['receiverDueAmount'] ?? 0 );
 				if ( $total <= 0 || $receiver <= 0 ) {
 					// Merchant pays, or Econt gave no usable split: the customer's
 					// price cannot be scaled from nothing, so leave it alone.
-					return 0.0;
+					return $unpriced;
 				}
 				$sized = self::quote_total( $settings, $auth, $products, $ctx );
-				if ( null === $sized || $sized <= $total ) {
-					return 0.0;
+				if ( null === $sized ) {
+					return $unpriced;
 				}
-				return round( $receiver * ( $sized / $total - 1 ), 2 );
+				if ( $sized <= $total ) {
+					return [ 'amount' => 0.0, 'priced' => true ];
+				}
+				return [ 'amount' => round( $receiver * ( $sized / $total - 1 ), 2 ), 'priced' => true ];
 			} catch ( \Throwable $e ) {
-				return 0.0;
+				return $unpriced;
 			}
+		}
+
+		/**
+		 * Fingerprint of a basket: sorted "product id:quantity" pairs. The
+		 * checkout stores the fingerprint of the cart whose oversize parcels were
+		 * priced by size; the order screen compares it with the order's items, so
+		 * an order edited afterwards in the admin gets its warning back.
+		 *
+		 * @param array<int, array{0: int, 1: int|float}> $lines [ id, quantity ] pairs.
+		 */
+		public static function items_signature( array $lines ): string {
+			$parts = [];
+			foreach ( $lines as $line ) {
+				$parts[] = (int) $line[0] . ':' . (float) $line[1];
+			}
+			sort( $parts );
+			return implode( ',', $parts );
+		}
+
+		/**
+		 * items_signature() of an order's product lines.
+		 */
+		public static function order_signature( WC_Order $order ): string {
+			$lines = [];
+			foreach ( $order->get_items( 'line_item' ) as $item ) {
+				$lines[] = [ (int) ( $item->get_variation_id() ?: $item->get_product_id() ), $item->get_quantity() ];
+			}
+			return self::items_signature( $lines );
 		}
 
 		/**

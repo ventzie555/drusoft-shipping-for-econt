@@ -467,6 +467,7 @@ function drushfe_clear_econt_checkout_session(): void {
 	WC()->session->set( 'drushfe_service_options', [] );
 	WC()->session->set( 'drushfe_selected_service', 0 );
 	WC()->session->set( 'drushfe_shipping_cost', 0 );
+	WC()->session->set( 'drushfe_oversize_priced', '' );
 	WC()->session->set( 'drushfe_shipping_data', null );
 	WC()->session->set( 'drushfe_delivery_type', 'address' );
 	WC()->session->set( 'drushfe_office_id', 0 );
@@ -1710,6 +1711,7 @@ function drushfe_clear_price_ajax(): void {
 		if ( ! $current_version || $flow_version >= $current_version ) {
 			WC()->session->set( 'drushfe_flow_version', $flow_version );
 			WC()->session->set( 'drushfe_shipping_cost', 0 );
+			WC()->session->set( 'drushfe_oversize_priced', '' );
 		}
 
 		if ( WC()->cart ) {
@@ -1863,7 +1865,10 @@ function drushfe_calculate_price_ajax(): void {
 		? array_map( static fn( $g ) => $g['ids'], $mo_split_groups )
 		: [ '' => null ];
 
-	$price = 0.0;
+	$price           = 0.0;
+	$oversize_groups = 0;
+	$oversize_priced = 0;
+	$quoted_lines    = [];
 	foreach ( $group_defs as $g_key => $g_ids ) {
 		$g_payload  = $payload;
 		$items_desc = [];
@@ -1881,7 +1886,8 @@ function drushfe_calculate_price_ajax(): void {
 				$weight = (float) ( $settings['teglo'] ?? 0.5 );
 			}
 			$name = $product->get_name();
-			$g_products[] = $product;
+			$g_products[]   = $product;
+			$quoted_lines[] = [ $pid, $qty ];
 
 			$g_payload['items'][] = [
 				'name'        => $name,
@@ -1939,7 +1945,7 @@ function drushfe_calculate_price_ajax(): void {
 				$g_weight += (float) $g_item['totalWeight'];
 				$g_sum    += (float) $g_item['totalPrice'];
 			}
-			$price += Drushfe_Dimensions::oversize_adjustment(
+			$oversize = Drushfe_Dimensions::oversize_check(
 				(array) $settings,
 				$g_auth,
 				$body,
@@ -1954,6 +1960,13 @@ function drushfe_calculate_price_ajax(): void {
 					'description'   => $g_payload['shipmentDescription'],
 				]
 			);
+			$price += $oversize['amount'];
+			if ( Drushfe_Dimensions::max_side_cm( $g_products ) >= Drushfe_Dimensions::OVERSIZE_CM ) {
+				$oversize_groups++;
+				if ( $oversize['priced'] ) {
+					$oversize_priced++;
+				}
+			}
 		}
 	}
 
@@ -1967,6 +1980,13 @@ function drushfe_calculate_price_ajax(): void {
 		$session->set( 'drushfe_flow_version', $flow_version );
 		$session->set( 'drushfe_shipping_cost', $price );
 		$session->set( 'drushfe_split_count', $mo_split_groups ? count( $group_defs ) : 0 );
+		// The basket this price was settled for, when EVERY oversize parcel in
+		// it was priced by its dimensions; '' otherwise. Checkout copies it to
+		// the order, and the order screen then drops its oversize warning.
+		$session->set(
+			'drushfe_oversize_priced',
+			( $oversize_groups && $oversize_groups === $oversize_priced ) ? Drushfe_Dimensions::items_signature( $quoted_lines ) : ''
+		);
 	}
 
 	$packages = WC()->cart->get_shipping_packages();
