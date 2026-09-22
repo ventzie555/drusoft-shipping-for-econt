@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.10
+Stable tag: 1.0.11
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,10 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.11 =
+* Important fix for shops whose Econt store bills the courier fee to the recipient: on cash-on-delivery orders the shipping charged at checkout was also folded into the COD amount, so the customer paid the delivery twice — once inside the COD and once as Econt's own courier fee at the door (29.99 goods + 5.11 shipping became a 35.10 COD, and Econt added 5.28 on top). Who pays the courier is set in your Достави с Еконт store profile, not in the plugin, so the plugin now asks Econt at waybill time: when the recipient pays, the COD carries the goods only; when the shop pays, the COD still includes the shipping, exactly as before. Introduced in 1.0.9 — if your store bills the recipient and you ship COD, please update.
+* New: every COD waybill now leaves an order note saying what the COD amount contains and who pays the courier, so the decision is visible before the parcel leaves.
 
 = 1.0.10 =
 * New (off by default): "Sizes on the Waybill" — adds each product's dimensions (L×W×H cm, from its Shipping tab) to the shipment description, so the size is visible on the waybill and in the Econt office. Достави с Еконт has no dimension fields of its own, and Econt prices standard parcels by weight alone, so this is informational and changes no price.

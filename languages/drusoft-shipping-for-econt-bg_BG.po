@@ -876,3 +876,23 @@ msgstr "Създадена товарителница на Еконт (прат�
 #: includes/class-drushfe-waybill-generator.php:318
 msgid "Unexpected response from Econt API."
 msgstr "Неочакван отговор от API на Еконт."
+
+#: includes/class-drushfe-waybill-generator.php
+#, php-format
+msgid "Cash on delivery %1$s: goods only. Your Econt store bills the courier fee to the recipient, so the %2$s shipping charged at checkout is not collected again."
+msgstr "Наложен платеж %1$s: само стоката. Вашият магазин в Еконт таксува куриерската услуга на получателя, затова доставката %2$s, платена при поръчката, не се събира повторно."
+
+#: includes/class-drushfe-waybill-generator.php
+#, php-format
+msgid "Cash on delivery %1$s: goods only. Your Econt store bills the courier fee to the recipient."
+msgstr "Наложен платеж %1$s: само стоката. Вашият магазин в Еконт таксува куриерската услуга на получателя."
+
+#: includes/class-drushfe-waybill-generator.php
+#, php-format
+msgid "Cash on delivery %1$s, including the %2$s shipping charged at checkout. Your Econt store bills the courier fee to the shop."
+msgstr "Наложен платеж %1$s, включително доставката %2$s, платена при поръчката. Вашият магазин в Еконт таксува куриерската услуга на магазина."
+
+#: includes/class-drushfe-waybill-generator.php
+#, php-format
+msgid "Cash on delivery %1$s. Econt did not say who pays the courier fee, so it is treated as paid by the shop — if your Econt store bills it to the recipient, check the amount on the waybill."
+msgstr "Наложен платеж %1$s. Еконт не отговори кой плаща куриерската услуга и тя се приема за платена от магазина — ако вашият магазин в Еконт я таксува на получателя, проверете сумата в товарителницата."

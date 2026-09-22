@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.10
+ * Version:     1.0.11
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '1.0.10' );
+define( 'DRUSHFE_VER',  '1.0.11' );
 
 /**
  * Load Dependencies
@@ -1866,6 +1866,7 @@ function drushfe_calculate_price_ajax(): void {
 		: [ '' => null ];
 
 	$price           = 0.0;
+	$receiver_due    = 0.0; // what Econt says the RECIPIENT owes it — the payer signal the waybill needs later
 	$oversize_groups = 0;
 	$oversize_priced = 0;
 	$quoted_lines    = [];
@@ -1932,7 +1933,8 @@ function drushfe_calculate_price_ajax(): void {
 			wp_send_json_error( __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
 		}
 
-		$price += (float) $body['receiverDueAmount'];
+		$price        += (float) $body['receiverDueAmount'];
+		$receiver_due += (float) $body['receiverDueAmount'];
 
 		// Oversize parcels (any side ≥ 100 cm) are priced by size, which the
 		// Достави с Еконт quote cannot see. Opt-in ("oversize_quote"); adds
@@ -1979,6 +1981,9 @@ function drushfe_calculate_price_ajax(): void {
 	if ( ! $current_version || $flow_version >= $current_version ) {
 		$session->set( 'drushfe_flow_version', $flow_version );
 		$session->set( 'drushfe_shipping_cost', $price );
+		// Kept for the waybill: > 0 means the store profile bills the courier
+		// fee to the recipient, so the COD must not carry our shipping line too.
+		$session->set( 'drushfe_receiver_due', round( $receiver_due, 2 ) );
 		$session->set( 'drushfe_split_count', $mo_split_groups ? count( $group_defs ) : 0 );
 		// The basket this price was settled for, when EVERY oversize parcel in
 		// it was priced by its dimensions; '' otherwise. Checkout copies it to

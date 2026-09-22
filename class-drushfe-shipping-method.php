@@ -106,6 +106,15 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				$order->update_meta_data( '_drushfe_oversize_priced', $oversize_priced );
 			}
 
+			// What Econt said the recipient owes it when this basket was quoted.
+			// The waybill re-asks Econt at creation time; this is its fallback
+			// when that call fails, so a recipient-pays store never gets our
+			// shipping line folded into the COD on top of Econt's own fee.
+			$receiver_due = WC()->session ? WC()->session->get( 'drushfe_receiver_due', null ) : null;
+			if ( null !== $receiver_due && '' !== $receiver_due ) {
+				$order->update_meta_data( '_drushfe_receiver_due', round( (float) $receiver_due, 2 ) );
+			}
+
 			// Record the resolved pickup profile: the admin order screen can
 			// override it before the waybill is generated.
 			// This hook fires on EVERY instantiation of the method (including

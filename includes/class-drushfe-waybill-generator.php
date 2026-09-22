@@ -198,18 +198,52 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 				// item carrying the exact difference to the order total.
 				// Split shipments keep their own item subsets, so the delta is
 				// added once, on the first parcel only.
+				//
+				// EXCEPT when the recipient pays the courier. Who pays is set in
+				// the merchant's Достави с Еконт store profile, not anywhere in
+				// this payload, and Econt's own quote tells which it is:
+				//   receiverDueAmount = 0  — the shop pays; Econt collects only
+				//                            what items[] says, so our shipping
+				//                            line MUST be folded in (above);
+				//   receiverDueAmount > 0  — the recipient pays; Econt adds its
+				//                            courier fee to the collection by
+				//                            itself, so folding our shipping in
+				//                            as well collects it TWICE.
+				// The 14.08 fix was written against a shop-pays store and did
+				// the second thing to every recipient-pays store: si-brand.eu,
+				// 22.09.2026 — 29.99 goods + 5.11 shipping sent as a 35.10 COD,
+				// Econt added 5.28 on top, the customer was asked for 40.38.
+				// So the payer is asked from Econt at waybill time with the
+				// goods-only payload, before the "Доставка" line is decided.
+
+				// This parcel's store key — needed by the payer lookup below and
+				// by updateOrder/createAWB after it.
+				$g_auth = ( null !== $g_ids && $method )
+					? $method->pickup_private_key( (string) $g_key )
+					: $private_key;
+
+				$cod_note = '';
 				if ( ! $is_split || 1 === $parcel_no ) {
 					$items_sum = 0.0;
 					foreach ( $g_payload['items'] as $g_item ) {
 						$items_sum += (float) $g_item['totalPrice'];
 					}
+					$shipping_paid = round(
+						(float) $order->get_shipping_total() + (float) $order->get_shipping_tax(), 2 );
 					$delta = round( (float) $order->get_total() - $items_sum, 2 );
 					if ( $is_split ) {
 						// under split, compare against the WHOLE order total is
 						// wrong — only shipping+rounding belongs here.
-						$delta = round(
-							(float) $order->get_shipping_total() + (float) $order->get_shipping_tax(), 2 );
+						$delta = $shipping_paid;
 					}
+
+					$receiver_pays = $cod
+						? self::receiver_pays( $base_url, $g_auth, $g_payload, $order )
+						: null;
+					if ( true === $receiver_pays && $shipping_paid > 0.009 ) {
+						$delta = round( $delta - $shipping_paid, 2 );
+					}
+
 					if ( $delta > 0.009 ) {
 						$g_payload['items'][] = [
 							'name'        => 'Доставка',
@@ -220,6 +254,28 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 							'totalPrice'  => $delta,
 							'totalWeight' => 0,
 						];
+					}
+
+					// Say on the order what the COD contains and why, so a
+					// merchant can see the payer decision before the parcel
+					// leaves — this bug ran for five weeks unseen.
+					if ( $cod ) {
+						$money      = static fn( float $v ): string => html_entity_decode( wp_strip_all_tags( wc_price( $v, [ 'currency' => $order->get_currency() ] ) ), ENT_QUOTES, 'UTF-8' );
+						$cod_amount = $money( $items_sum + max( 0.0, $delta ) );
+						$ship_fmt   = $money( $shipping_paid );
+						if ( true === $receiver_pays && $shipping_paid > 0.009 ) {
+							/* translators: 1: COD amount, 2: shipping charged at checkout */
+							$cod_note = sprintf( __( 'Cash on delivery %1$s: goods only. Your Econt store bills the courier fee to the recipient, so the %2$s shipping charged at checkout is not collected again.', 'drusoft-shipping-for-econt' ), $cod_amount, $ship_fmt );
+						} elseif ( true === $receiver_pays ) {
+							/* translators: 1: COD amount */
+							$cod_note = sprintf( __( 'Cash on delivery %1$s: goods only. Your Econt store bills the courier fee to the recipient.', 'drusoft-shipping-for-econt' ), $cod_amount );
+						} elseif ( false === $receiver_pays ) {
+							/* translators: 1: COD amount, 2: shipping charged at checkout */
+							$cod_note = sprintf( __( 'Cash on delivery %1$s, including the %2$s shipping charged at checkout. Your Econt store bills the courier fee to the shop.', 'drusoft-shipping-for-econt' ), $cod_amount, $ship_fmt );
+						} else {
+							/* translators: 1: COD amount */
+							$cod_note = sprintf( __( 'Cash on delivery %1$s. Econt did not say who pays the courier fee, so it is treated as paid by the shop — if your Econt store bills it to the recipient, check the amount on the waybill.', 'drusoft-shipping-for-econt' ), $cod_amount );
+						}
 					}
 				}
 
@@ -234,10 +290,6 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					// each store needs its own unique order number
 					$g_payload['orderNumber'] = $order_id . '-' . $parcel_no;
 				}
-
-				$g_auth = ( null !== $g_ids && $method )
-					? $method->pickup_private_key( (string) $g_key )
-					: $private_key;
 
 				$response = wp_remote_post(
 					$base_url . 'services/OrdersService.updateOrder.json',
@@ -307,7 +359,7 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 					if ( ! empty( $body['shipmentNumber'] ) ) {
 						$order->update_meta_data( '_drushfe_shipment_number', (string) $body['shipmentNumber'] );
 					}
-					$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id );
+					$order->add_order_note( __( 'Econt Waybill Created: ', 'drusoft-shipping-for-econt' ) . $waybill_id . ( '' !== $cod_note ? "\n" . $cod_note : '' ) );
 				} else {
 					/* translators: 1: parcel number, 2: waybill id */
 					$order->add_order_note( sprintf( __( 'Econt Waybill Created (parcel %1$d): %2$s', 'drusoft-shipping-for-econt' ), $parcel_no, $waybill_id ) );
@@ -322,6 +374,48 @@ if ( ! class_exists( 'Drushfe_Waybill_Generator' ) ) {
 			}
 			$order->save();
 			return $first_waybill_id;
+		}
+
+		/**
+		 * Does the recipient pay the courier fee on this shipment?
+		 *
+		 * Asks Достави с Еконт to price the goods-only payload: a non-zero
+		 * receiverDueAmount means the store profile bills the recipient, in
+		 * which case Econt adds the fee to the collection itself. Falls back
+		 * to the answer the same call gave at checkout (saved on the order),
+		 * and to null when neither is available — the caller then keeps the
+		 * shop-pays behaviour and says so on the order.
+		 *
+		 * @param string   $base_url API base (live or demo).
+		 * @param string   $auth     Store private key for this parcel.
+		 * @param array    $payload  Order payload WITHOUT the "Доставка" line.
+		 * @param WC_Order $order    The order, for the checkout-time fallback.
+		 * @return bool|null
+		 */
+		public static function receiver_pays( string $base_url, string $auth, array $payload, WC_Order $order ): ?bool {
+			$response = wp_remote_post(
+				$base_url . 'services/OrdersService.getPrice.json',
+				[
+					'headers' => [
+						'Content-Type'  => 'application/json',
+						'Authorization' => $auth,
+					],
+					'body'    => wp_json_encode( $payload ),
+					'timeout' => 15,
+				]
+			);
+			if ( ! is_wp_error( $response ) ) {
+				$body = json_decode( wp_remote_retrieve_body( $response ), true );
+				if ( is_array( $body ) && empty( $body['type'] ) && isset( $body['receiverDueAmount'] ) ) {
+					return (float) $body['receiverDueAmount'] > 0.009;
+				}
+			}
+
+			$quoted = $order->get_meta( '_drushfe_receiver_due' );
+			if ( '' !== $quoted && null !== $quoted ) {
+				return (float) $quoted > 0.009;
+			}
+			return null;
 		}
 
 		/**
