@@ -7,8 +7,6 @@
 # Node (in case anyone runs an asset build here later)
 node_modules/
 
-# WordPress unit tests
-/tests/
-
-# Playwright artifacts (when tests are run from this directory)
+# Generated test artifacts — the hand-written harness in /tests IS versioned
+/tests/_output/
 /test-results/
