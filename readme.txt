@@ -34,9 +34,9 @@ This plugin is currently **not compatible** with the WooCommerce Block Cart and 
 * **Dedicated Econt Orders Page** — Filtered admin list of every Econt order with bulk Generate / Print / Cancel actions.
 * **Bulgarian (bg_BG) Translation Included.**
 
-= Also Ship via Speedy? =
+= Also Ship via Speedy or Sameday? =
 
-This plugin has a sibling for the **Speedy** courier: [Drusoft Shipping for Speedy](https://wordpress.org/plugins/drusoft-shipping-for-speedy/). Both plugins share the same checkout UI, settings layout, and admin order-management screens — once you've learned one, the other feels familiar. Install both if your store supports delivery via either courier.
+This plugin has siblings for the other Bulgarian couriers: [Drusoft Shipping for Speedy](https://wordpress.org/plugins/drusoft-shipping-for-speedy/) and **Drusoft Shipping for Sameday** (offices, address delivery and easybox lockers; submitted to the plugin directory and available on [GitHub](https://github.com/ventzie555/drusoft-shipping-for-sameday) in the meantime). All three share the same checkout UI, settings layout, and admin order-management screens — once you've learned one, the others feel familiar. Install as many as your store delivers with; each keeps its own checkout selection.
 
 == Installation ==
 
