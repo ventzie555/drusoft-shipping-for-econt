@@ -896,3 +896,13 @@ msgstr "Наложен платеж %1$s, включително доставк�
 #, php-format
 msgid "Cash on delivery %1$s. Econt did not say who pays the courier fee, so it is treated as paid by the shop — if your Econt store bills it to the recipient, check the amount on the waybill."
 msgstr "Наложен платеж %1$s. Еконт не отговори кой плаща куриерската услуга и тя се приема за платена от магазина — ако вашият магазин в Еконт я таксува на получателя, проверете сумата в товарителницата."
+
+#. translators: %s: the courier's reason for refusing to quote a delivery price
+msgid "Econt could not price this delivery: %s"
+msgstr "Еконт не може да изчисли цена за тази доставка: %s"
+
+msgid "The courier did not answer. Please try again in a moment."
+msgstr "Куриерът не отговори. Моля, опитайте отново след малко."
+
+msgid "няма отговор"
+msgstr "няма отговор"

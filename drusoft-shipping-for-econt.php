@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.11
+ * Version:     1.0.12
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -466,8 +466,7 @@ function drushfe_clear_econt_checkout_session(): void {
 
 	WC()->session->set( 'drushfe_service_options', [] );
 	WC()->session->set( 'drushfe_selected_service', 0 );
-	WC()->session->set( 'drushfe_shipping_cost', 0 );
-	WC()->session->set( 'drushfe_oversize_priced', '' );
+	drushfe_forget_quote();
 	WC()->session->set( 'drushfe_shipping_data', null );
 	WC()->session->set( 'drushfe_delivery_type', 'address' );
 	WC()->session->set( 'drushfe_office_id', 0 );
@@ -528,6 +527,8 @@ function drushfe_enqueue_scripts(): void {
 		'currency_symbol'    => get_woocommerce_currency_symbol(),
 		'i18n'            => array(
 			'delivery_method'  => __( 'Delivery Method', 'drusoft-shipping-for-econt' ),
+			/* translators: %s: the courier's reason for refusing to quote a delivery price */
+			'quote_error'      => __( 'Econt could not price this delivery: %s', 'drusoft-shipping-for-econt' ),
 			'to_address'       => __( 'To Address', 'drusoft-shipping-for-econt' ),
 			'to_office'        => __( 'To Office', 'drusoft-shipping-for-econt' ),
 			'to_automat'       => __( 'To Automat', 'drusoft-shipping-for-econt' ),
@@ -1710,8 +1711,7 @@ function drushfe_clear_price_ajax(): void {
 		$current_version = absint( WC()->session->get( 'drushfe_flow_version', 0 ) );
 		if ( ! $current_version || $flow_version >= $current_version ) {
 			WC()->session->set( 'drushfe_flow_version', $flow_version );
-			WC()->session->set( 'drushfe_shipping_cost', 0 );
-			WC()->session->set( 'drushfe_oversize_priced', '' );
+			drushfe_forget_quote();
 		}
 
 		if ( WC()->cart ) {
@@ -1732,28 +1732,135 @@ function drushfe_calculate_price_ajax(): void {
 		wp_send_json_error( __( 'No cart session', 'drusoft-shipping-for-econt' ) );
 	}
 
-	$delivery_type = isset( $_POST['delivery_type'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_type'] ) ) : 'address';
-	$city_id       = isset( $_POST['city_id'] ) ? absint( wp_unslash( $_POST['city_id'] ) ) : 0;
-	$city_name     = isset( $_POST['city_name'] ) ? sanitize_text_field( wp_unslash( $_POST['city_name'] ) ) : '';
-	$postcode      = isset( $_POST['postcode'] ) ? sanitize_text_field( wp_unslash( $_POST['postcode'] ) ) : '';
-	$office_code   = isset( $_POST['office_code'] ) ? sanitize_text_field( wp_unslash( $_POST['office_code'] ) ) : '';
-	$address       = isset( $_POST['address'] ) ? sanitize_text_field( wp_unslash( $_POST['address'] ) ) : '';
-	$state         = isset( $_POST['state'] ) ? sanitize_text_field( wp_unslash( $_POST['state'] ) ) : '';
-	$flow_version  = isset( $_POST['flow_version'] ) ? absint( wp_unslash( $_POST['flow_version'] ) ) : 0;
+	$in = [
+		'delivery_type'  => isset( $_POST['delivery_type'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_type'] ) ) : 'address',
+		'city_id'        => isset( $_POST['city_id'] ) ? absint( wp_unslash( $_POST['city_id'] ) ) : 0,
+		'city_name'      => isset( $_POST['city_name'] ) ? sanitize_text_field( wp_unslash( $_POST['city_name'] ) ) : '',
+		'postcode'       => isset( $_POST['postcode'] ) ? sanitize_text_field( wp_unslash( $_POST['postcode'] ) ) : '',
+		'office_code'    => isset( $_POST['office_code'] ) ? sanitize_text_field( wp_unslash( $_POST['office_code'] ) ) : '',
+		'address'        => isset( $_POST['address'] ) ? sanitize_text_field( wp_unslash( $_POST['address'] ) ) : '',
+		'state'          => isset( $_POST['state'] ) ? sanitize_text_field( wp_unslash( $_POST['state'] ) ) : '',
+		'payment_method' => isset( $_POST['payment_method'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_method'] ) ) : '',
+	];
+	$flow_version = isset( $_POST['flow_version'] ) ? absint( wp_unslash( $_POST['flow_version'] ) ) : 0;
 
+	drushfe_remember_selection( $in );
+
+	$quote = drushfe_quote( $in );
+	if ( is_wp_error( $quote ) ) {
+		// The customer sees this under the Econt fields (checkout.js); the
+		// price stays unset, and the checkout re-asks Econt at submit.
+		WC()->session->set( 'drushfe_last_quote_error', $quote->get_error_message() );
+		wp_send_json_error( $quote->get_error_message() );
+	}
+
+	WC()->session->set( 'drushfe_last_quote_error', '' );
+	drushfe_store_quote( $quote, $flow_version );
+
+	wp_send_json_success( [
+		'price'        => $quote['price'],
+		'currency'     => $quote['currency'],
+		'flow_version' => $flow_version,
+	] );
+}
+
+/**
+ * Keep the customer's Econt selection in the WC session. Shared by the live
+ * quote (checkout.js) and the checkout-submit re-quote, so both read the same
+ * selection that calculate_shipping() and the waybill later rely on.
+ *
+ * @param array $in delivery_type, city_id, city_name, postcode, office_code, address, state.
+ */
+function drushfe_remember_selection( array $in ): void {
 	$session = WC()->session;
-	$session->set( 'drushfe_delivery_type', $delivery_type );
-	$session->set( 'drushfe_city_id', $city_id );
-	$session->set( 'drushfe_city_name', $city_name );
-	$session->set( 'drushfe_postcode', $postcode );
-	$session->set( 'drushfe_state', $state );
+	if ( ! $session ) {
+		return;
+	}
+	$session->set( 'drushfe_delivery_type', $in['delivery_type'] );
+	$session->set( 'drushfe_city_id', (int) $in['city_id'] );
+	$session->set( 'drushfe_city_name', $in['city_name'] );
+	// What the customer TYPED. The quote itself never uses it (see
+	// drushfe_quote), but the order keeps it for diagnosis.
+	$session->set( 'drushfe_postcode', $in['postcode'] );
+	$session->set( 'drushfe_state', $in['state'] );
 
-	if ( 'office' === $delivery_type || 'automat' === $delivery_type ) {
-		$session->set( 'drushfe_office_id', $office_code );
+	if ( 'office' === $in['delivery_type'] || 'automat' === $in['delivery_type'] ) {
+		$session->set( 'drushfe_office_id', $in['office_code'] );
 		$session->set( 'drushfe_address', '' );
 	} else {
 		$session->set( 'drushfe_office_id', '' );
-		$session->set( 'drushfe_address', $address );
+		$session->set( 'drushfe_address', $in['address'] );
+	}
+}
+
+/**
+ * The postcode Econt expects for one of OUR city ids, from the synced
+ * nomenclature. Econt validates cityName against postCode on every quote and
+ * refuses a mismatch ("Несъответствие между населено място и пощенски код"),
+ * so the typed postcode must never reach the payload: a customer who picked
+ * гр. София and typed the postcode of the village she lives in was quoted
+ * nothing and shipped free (trisestri.bg order 816, 30.09.2026).
+ */
+function drushfe_city_postcode( int $city_id ): string {
+	if ( $city_id <= 0 ) {
+		return '';
+	}
+	global $wpdb;
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	$pc = $wpdb->get_var( $wpdb->prepare( "SELECT post_code FROM {$wpdb->prefix}drushfe_cities WHERE id = %d", $city_id ) );
+	return is_string( $pc ) ? trim( $pc ) : '';
+}
+
+/**
+ * Write a failed quote to the WooCommerce log (WooCommerce → Status → Logs,
+ * source "drusoft-shipping-for-econt"). Econt's refusal is the only record of
+ * WHY a checkout got no price; without it the next free-shipped order is as
+ * blind as the last one was.
+ */
+function drushfe_log_quote_failure( string $message, array $in, array $extra = [] ): void {
+	if ( ! function_exists( 'wc_get_logger' ) ) {
+		return;
+	}
+	$ctx = [
+		'delivery_type' => $in['delivery_type'] ?? '',
+		'city_id'       => $in['city_id'] ?? '',
+		'city_name'     => $in['city_name'] ?? '',
+		'postcode'      => $in['postcode'] ?? '',
+		'office_code'   => $in['office_code'] ?? '',
+		'payment'       => $in['payment_method'] ?? '',
+	] + $extra;
+	wc_get_logger()->error(
+		'Econt getPrice failed: ' . $message . ' | ' . wp_json_encode( $ctx, JSON_UNESCAPED_UNICODE ),
+		[ 'source' => 'drusoft-shipping-for-econt' ]
+	);
+}
+
+/**
+ * Ask Econt (OrdersService.getPrice.json) what delivering the current cart to
+ * the given selection costs. Pure: reads the cart and the settings, writes
+ * nothing to the session — callers store the result with drushfe_store_quote().
+ *
+ * @param array $in delivery_type, city_id, city_name, postcode, office_code,
+ *                  address, state, payment_method.
+ * @return array|WP_Error price, receiver_due, currency, split_count,
+ *                        oversize_priced (items signature or ''), quoted_lines.
+ */
+function drushfe_quote( array $in ) {
+	if ( ! WC()->cart ) {
+		return new WP_Error( 'drushfe_no_cart', __( 'No cart session', 'drusoft-shipping-for-econt' ) );
+	}
+
+	$delivery_type = (string) ( $in['delivery_type'] ?? 'address' );
+	$city_id       = (int) ( $in['city_id'] ?? 0 );
+	$city_name     = (string) ( $in['city_name'] ?? '' );
+	$office_code   = (string) ( $in['office_code'] ?? '' );
+	$address       = (string) ( $in['address'] ?? '' );
+	// Never the typed value: the nomenclature's postcode for the chosen city
+	// (see drushfe_city_postcode). The typed one is only a fallback when the
+	// city is unknown to us, which the dropdown makes impossible.
+	$postcode = drushfe_city_postcode( $city_id );
+	if ( '' === $postcode ) {
+		$postcode = (string) ( $in['postcode'] ?? '' );
 	}
 
 	$settings = function_exists( 'drushfe_get_first_credentials' ) ? drushfe_get_first_credentials() : [];
@@ -1785,7 +1892,9 @@ function drushfe_calculate_price_ajax(): void {
 	}
 
 	if ( empty( $private_key ) ) {
-		wp_send_json_error( __( 'Econt private key not configured', 'drusoft-shipping-for-econt' ) );
+		$err = new WP_Error( 'drushfe_no_key', __( 'Econt private key not configured', 'drusoft-shipping-for-econt' ) );
+		drushfe_log_quote_failure( $err->get_error_message(), $in );
+		return $err;
 	}
 
 	$is_demo  = ! empty( $settings['econt_test_mode'] ) && 'yes' === $settings['econt_test_mode'];
@@ -1795,7 +1904,7 @@ function drushfe_calculate_price_ajax(): void {
 	$base_url       = $is_demo ? 'https://delivery-demo.econt.com/' : 'https://delivery.econt.com/';
 	$nomencl_base   = $is_demo ? 'https://demo.econt.com/ee/' : 'https://ee.econt.com/';
 
-	$chosen_payment = isset( $_POST['payment_method'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_method'] ) ) : '';
+	$chosen_payment = (string) ( $in['payment_method'] ?? '' );
 	$cod = in_array( $chosen_payment, [ 'cod' ], true );
 
 	$payload = [
@@ -1816,6 +1925,10 @@ function drushfe_calculate_price_ajax(): void {
 			'phone'        => '0888888888',
 			'email'        => 'test@example.com',
 			'countryCode'  => 'BGR',
+			// Econt resolves the city from cityName + postCode (and refuses a
+			// mismatching pair even when cityID is present), so the pair always
+			// comes from our nomenclature; cityID is sent as well.
+			'cityID'       => $city_id > 0 ? $city_id : '',
 			'cityName'     => $city_name,
 			'postCode'     => $postcode,
 			// office_code may be empty on cart-page calls (no office picker there).
@@ -1884,7 +1997,12 @@ function drushfe_calculate_price_ajax(): void {
 			$g_price = (float) ( $cart_item['line_total'] + $cart_item['line_tax'] );
 			$weight  = (float) $product->get_weight();
 			if ( $weight <= 0 ) {
-				$weight = (float) ( $settings['teglo'] ?? 0.5 );
+				// Econt refuses a zero weight ("Некоректно тегло"), and an empty
+				// default-weight setting would otherwise send exactly that.
+				$weight = (float) ( $settings['teglo'] ?? 0 );
+				if ( $weight <= 0 ) {
+					$weight = 0.5;
+				}
 			}
 			$name = $product->get_name();
 			$g_products[]   = $product;
@@ -1911,8 +2029,11 @@ function drushfe_calculate_price_ajax(): void {
 			$base_url . 'services/OrdersService.getPrice.json',
 			[
 				'headers' => [
-					'Content-Type'  => 'application/json',
-					'Authorization' => $g_auth,
+					'Content-Type'    => 'application/json',
+					'Authorization'   => $g_auth,
+					// Econt words its refusals in the language asked for; the
+					// message is shown to the customer on the checkout page.
+					'Accept-Language' => drushfe_api_language(),
 				],
 				'body'    => wp_json_encode( $g_payload ),
 				'timeout' => 15,
@@ -1920,17 +2041,22 @@ function drushfe_calculate_price_ajax(): void {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			wp_send_json_error( $response->get_error_message() );
+			drushfe_log_quote_failure( $response->get_error_message(), $in, [ 'stage' => 'transport' ] );
+			return new WP_Error( 'drushfe_transport', __( 'The courier did not answer. Please try again in a moment.', 'drusoft-shipping-for-econt' ) );
 		}
 
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		$raw  = wp_remote_retrieve_body( $response );
+		$body = json_decode( $raw, true );
 
 		if ( ! empty( $body['type'] ) ) {
-			wp_send_json_error( $body['message'] ?? __( 'Pricing failed', 'drusoft-shipping-for-econt' ) );
+			$msg = (string) ( $body['message'] ?? __( 'Pricing failed', 'drusoft-shipping-for-econt' ) );
+			drushfe_log_quote_failure( $msg, $in, [ 'stage' => 'econt', 'type' => $body['type'], 'http' => wp_remote_retrieve_response_code( $response ) ] );
+			return new WP_Error( 'drushfe_econt', $msg );
 		}
 
 		if ( ! isset( $body['receiverDueAmount'] ) ) {
-			wp_send_json_error( __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
+			drushfe_log_quote_failure( 'no receiverDueAmount', $in, [ 'stage' => 'econt', 'http' => wp_remote_retrieve_response_code( $response ), 'body' => mb_substr( $raw, 0, 300 ) ] );
+			return new WP_Error( 'drushfe_no_price', __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
 		}
 
 		$price        += (float) $body['receiverDueAmount'];
@@ -1972,38 +2098,166 @@ function drushfe_calculate_price_ajax(): void {
 		}
 	}
 
-	// Race guard: only overwrite the session price if this response is for the
-	// latest selection flow_version. Older responses arriving late are ignored.
-	// flow_version is a Date.now() millisecond timestamp set by the browser
-	// (see assets/js/checkout.js + cart.js) so a fresh page load always
-	// produces newer versions than anything persisted in the WC session.
-	$current_version = absint( $session->get( 'drushfe_flow_version', 0 ) );
-	if ( ! $current_version || $flow_version >= $current_version ) {
-		$session->set( 'drushfe_flow_version', $flow_version );
-		$session->set( 'drushfe_shipping_cost', $price );
-		// Kept for the waybill: > 0 means the store profile bills the courier
-		// fee to the recipient, so the COD must not carry our shipping line too.
-		$session->set( 'drushfe_receiver_due', round( $receiver_due, 2 ) );
-		$session->set( 'drushfe_split_count', $mo_split_groups ? count( $group_defs ) : 0 );
+	return [
+		'price'           => $price,
+		'receiver_due'    => round( $receiver_due, 2 ),
+		'currency'        => $body['currency'] ?? get_woocommerce_currency(),
+		'split_count'     => $mo_split_groups ? count( $group_defs ) : 0,
 		// The basket this price was settled for, when EVERY oversize parcel in
 		// it was priced by its dimensions; '' otherwise. Checkout copies it to
 		// the order, and the order screen then drops its oversize warning.
-		$session->set(
-			'drushfe_oversize_priced',
-			( $oversize_groups && $oversize_groups === $oversize_priced ) ? Drushfe_Dimensions::items_signature( $quoted_lines ) : ''
-		);
+		'oversize_priced' => ( $oversize_groups && $oversize_groups === $oversize_priced && class_exists( 'Drushfe_Dimensions' ) ) ? Drushfe_Dimensions::items_signature( $quoted_lines ) : '',
+		'cart_hash'       => WC()->cart->get_cart_hash(),
+	];
+}
+
+/**
+ * Language Econt should answer in: the site's, so a refusal shown to the
+ * customer reads naturally. Econt honours Accept-Language (bg / en / ru).
+ */
+function drushfe_api_language(): string {
+	$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+	return str_starts_with( $locale, 'bg' ) ? 'bg' : 'en';
+}
+
+/**
+ * Put a quote into the WC session, where calculate_shipping() reads it.
+ *
+ * Race guard: only overwrite the session price if this response is for the
+ * latest selection flow_version. Older responses arriving late are ignored.
+ * flow_version is a Date.now() millisecond timestamp set by the browser
+ * (see assets/js/checkout.js + cart.js) so a fresh page load always
+ * produces newer versions than anything persisted in the WC session.
+ * A flow_version of 0 (server-side callers) always wins.
+ */
+function drushfe_store_quote( array $quote, int $flow_version = 0 ): bool {
+	$session = WC()->session;
+	if ( ! $session ) {
+		return false;
+	}
+	$current_version = absint( $session->get( 'drushfe_flow_version', 0 ) );
+	if ( $flow_version && $current_version && $flow_version < $current_version ) {
+		return false;
+	}
+	if ( $flow_version ) {
+		$session->set( 'drushfe_flow_version', $flow_version );
+	}
+	$session->set( 'drushfe_shipping_cost', $quote['price'] );
+	// Kept for the waybill: > 0 means the store profile bills the courier
+	// fee to the recipient, so the COD must not carry our shipping line too.
+	$session->set( 'drushfe_receiver_due', $quote['receiver_due'] );
+	$session->set( 'drushfe_split_count', $quote['split_count'] );
+	$session->set( 'drushfe_oversize_priced', $quote['oversize_priced'] );
+	// The basket this price belongs to; a different basket at submit re-quotes.
+	$session->set( 'drushfe_quoted_cart_hash', $quote['cart_hash'] );
+
+	if ( WC()->cart ) {
+		foreach ( WC()->cart->get_shipping_packages() as $key => $package ) {
+			$session->set( 'shipping_for_package_' . $key, false );
+		}
+	}
+	return true;
+}
+
+/**
+ * Drop a stored quote: price AND everything that was written with it.
+ *
+ * The two used to part ways — the clear paths zeroed the cost but left
+ * receiver_due, so an order could carry a 0.00 shipping line next to a
+ * quoted amount. One failed re-quote was then enough to ship free.
+ */
+function drushfe_forget_quote(): void {
+	$session = WC()->session;
+	if ( ! $session ) {
+		return;
+	}
+	$session->set( 'drushfe_shipping_cost', 0 );
+	$session->set( 'drushfe_receiver_due', null );
+	$session->set( 'drushfe_split_count', 0 );
+	$session->set( 'drushfe_oversize_priced', '' );
+	$session->set( 'drushfe_quoted_cart_hash', '' );
+}
+
+/**
+ * The selection the checkout was submitted with, for the submit-time quote.
+ * The posted form wins over the session (the office is a plugin field, the
+ * city id is the dropdown value WooCommerce posts as billing/shipping_city).
+ */
+function drushfe_submitted_selection(): array {
+	$session = WC()->session;
+	$get     = static function ( string $key, string $default = '' ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified by WooCommerce in woocommerce_checkout_process.
+		return isset( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : $default;
+	};
+	$ctx = '1' === $get( 'ship_to_different_address' ) ? 'shipping' : 'billing';
+
+	$city_raw = $get( $ctx . '_city' );
+	$city_id  = ctype_digit( $city_raw ) ? (int) $city_raw : (int) ( $session ? $session->get( 'drushfe_city_id', 0 ) : 0 );
+
+	$city_name = (string) ( $session ? $session->get( 'drushfe_city_name', '' ) : '' );
+	if ( $city_id && '' === $city_name ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$city_name = (string) $wpdb->get_var( $wpdb->prepare( "SELECT name FROM {$wpdb->prefix}drushfe_cities WHERE id = %d", $city_id ) );
 	}
 
-	$packages = WC()->cart->get_shipping_packages();
-	foreach ( $packages as $key => $package ) {
-		$session->set( 'shipping_for_package_' . $key, false );
+	return [
+		'delivery_type'  => $get( 'econt_delivery_type', (string) ( $session ? $session->get( 'drushfe_delivery_type', 'address' ) : 'address' ) ),
+		'city_id'        => $city_id,
+		'city_name'      => $city_name,
+		'postcode'       => $get( $ctx . '_postcode' ),
+		'office_code'    => $get( 'econt_office_id', (string) ( $session ? $session->get( 'drushfe_office_id', '' ) : '' ) ),
+		'address'        => $get( $ctx . '_address_1' ),
+		'state'          => $get( $ctx . '_state' ),
+		'payment_method' => $get( 'payment_method' ),
+	];
+}
+
+/**
+ * Last chance for a price: re-ask Econt when the order is submitted.
+ *
+ * Runs on woocommerce_checkout_process, i.e. before WooCommerce recalculates
+ * shipping for the order, so whatever lands in the session here is what the
+ * order is charged. Quotes when the session holds no price (the live quote
+ * failed, never ran, or was cleared by another tab) or when the basket is no
+ * longer the one that was quoted. A quote that fails here is logged and the
+ * order still goes through with 0.00 and a note (see flag_unpriced_shipping):
+ * the merchant wants the sale.
+ */
+add_action( 'woocommerce_checkout_process', 'drushfe_requote_on_submit', 5 );
+function drushfe_requote_on_submit(): void {
+	$session = WC()->session;
+	if ( ! $session || ! WC()->cart ) {
+		return;
+	}
+	$chosen = (array) $session->get( 'chosen_shipping_methods', [] );
+	if ( ! str_contains( (string) ( $chosen[0] ?? '' ), 'drushfe_econt' ) ) {
+		return;
 	}
 
-	wp_send_json_success( [
-		'price'        => $price,
-		'currency'     => $body['currency'] ?? get_woocommerce_currency(),
-		'flow_version' => $flow_version,
-	] );
+	$in = drushfe_submitted_selection();
+	if ( $in['city_id'] <= 0 ) {
+		return;
+	}
+	if ( in_array( $in['delivery_type'], [ 'office', 'automat' ], true ) && '' === $in['office_code'] ) {
+		return; // drushfe_validate_checkout refuses this order anyway.
+	}
+
+	$cost     = (float) $session->get( 'drushfe_shipping_cost', 0 );
+	$same_cart = (string) $session->get( 'drushfe_quoted_cart_hash', '' ) === WC()->cart->get_cart_hash();
+	if ( $cost > 0 && $same_cart ) {
+		return;
+	}
+
+	drushfe_remember_selection( $in );
+	$quote = drushfe_quote( $in );
+	if ( is_wp_error( $quote ) ) {
+		$session->set( 'drushfe_last_quote_error', $quote->get_error_message() );
+		drushfe_forget_quote();
+		return;
+	}
+	$session->set( 'drushfe_last_quote_error', '' );
+	drushfe_store_quote( $quote, 0 );
 }
 
 /**

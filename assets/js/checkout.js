@@ -112,7 +112,11 @@
             const cityName     = ($('#' + currentContext + '_city option:selected').text() || '')
                                     .replace(/\s*\(\d+\)\s*$/, '')
                                     .trim();
-            const postcode     = $('#' + currentContext + '_postcode').val() || '';
+            // The chosen city's own postcode, never the field: Econt refuses a
+            // city/postcode mismatch outright, and the field is locked anyway
+            // (lockPostcode) — this is the belt to that braces.
+            const postcode     = String($('#' + currentContext + '_city option:selected').data('postcode')
+                                    || $('#' + currentContext + '_postcode').val() || '');
             const state        = $('#' + currentContext + '_state').val() || '';
             const officeCode   = $('#econt_office_id').val() || '';
             const address      = $('#' + currentContext + '_address_1').val() || '';
@@ -153,6 +157,15 @@
                 url:    params.ajax_url,
                 method: 'POST',
                 data:   payload,
+            }).done(function(resp) {
+                if (myVersion !== flowVersion) return;
+                // A refusal used to vanish here: the price simply stayed blank
+                // and the customer could place the order without one.
+                if (resp && resp.success === false && !incomplete) {
+                    showQuoteError(typeof resp.data === 'string' ? resp.data : '');
+                } else {
+                    clearQuoteError();
+                }
             }).always(function() {
                 // Only the latest call's completion should drive update_checkout.
                 // Earlier calls' completions will trigger redundant refreshes;
@@ -161,6 +174,58 @@
                 if (myVersion !== flowVersion) return;
                 $(document.body).trigger('update_checkout');
             });
+        }
+
+        // ─── Quote refusal shown to the customer ─────────────────────────
+        // Placed right under the Econt fields, in the courier's own words
+        // (the server asks Econt to answer in the site language).
+        function showQuoteError(message) {
+            clearQuoteError();
+            const text = (params.i18n.quote_error || 'Econt: %s').replace('%s', message || '');
+            const $anchor = $('#econt-office-field, #econt-delivery-type-field, #' + currentContext + '_city_field').first();
+            if (!$anchor.length) return;
+            $('<p class="form-row form-row-wide" id="econt-quote-error" role="alert"></p>')
+                .text(text)
+                .css({ color: '#b32d2e', fontWeight: '600', marginTop: '6px' })
+                .insertAfter($('#econt-office-field').length ? $('#econt-office-field') : $anchor);
+        }
+        function clearQuoteError() {
+            $('#econt-quote-error').remove();
+        }
+
+        // ─── Postcode lock ────────────────────────────────────────────────
+        // While Econt is the courier the postcode is not the customer's to
+        // type: it follows the chosen city (data-postcode on the option), the
+        // same way the cart page already does it. A customer who picked
+        // гр. София and typed her village's postcode got no quote and shipped
+        // free (trisestri.bg order 816).
+        function lockPostcode() {
+            const $pc = $('#' + currentContext + '_postcode');
+            if (!$pc.length) return;
+            if (!$pc.data('drushfeLocked')) {
+                $pc.data('drushfeLocked', true)
+                   .data('drushfeBg', $pc.css('background-color'))
+                   .prop('readonly', true)
+                   .attr('aria-readonly', 'true')
+                   .css('background-color', '#eee');
+            }
+            syncPostcodeFromCity();
+        }
+        function unlockPostcode() {
+            $('#billing_postcode, #shipping_postcode').each(function () {
+                const $pc = $(this);
+                if (!$pc.data('drushfeLocked')) return;
+                $pc.prop('readonly', false).removeAttr('aria-readonly')
+                   .css('background-color', $pc.data('drushfeBg') || '')
+                   .removeData('drushfeLocked').removeData('drushfeBg');
+            });
+        }
+        function syncPostcodeFromCity() {
+            const pc = $('#' + currentContext + '_city option:selected').data('postcode');
+            const $pc = $('#' + currentContext + '_postcode');
+            if (pc && $pc.val() !== String(pc)) {
+                $pc.val(pc);
+            }
         }
 
         // ─── Office Map (nationwide) ──────────────────────────────────────
@@ -571,6 +636,7 @@
             // sibling courier's. The restore chain below re-fills it from our own
             // pre-selected city/office.
             $('#' + currentContext + '_postcode').val('');
+            lockPostcode();
 
             // City to pre-select comes only from our own cache/session — not the
             // DOM value, which would be the sibling courier's city.
@@ -775,6 +841,8 @@
                 restoreFieldOrder();
             }
 
+            unlockPostcode();
+            clearQuoteError();
             lastDeliveryType = 'address';
             lastOfficeId = '';
             sessionStorage.removeItem('econt_delivery_type');

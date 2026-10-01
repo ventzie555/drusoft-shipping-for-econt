@@ -225,6 +225,14 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				$order->update_meta_data( "_drushfe_{$addr}_city_id", (int) $value );
 				$order->$city_setter( $row->name );
 				if ( ! empty( $row->post_code ) ) {
+					// Keep what the customer typed before it is overwritten: the
+					// rewrite erased the only trace of a wrong postcode on
+					// trisestri.bg order 816 and cost a day of diagnosis.
+					$pc_getter = "get_{$addr}_postcode";
+					$typed     = trim( (string) $order->$pc_getter() );
+					if ( '' !== $typed && $typed !== (string) $row->post_code ) {
+						$order->update_meta_data( "_drushfe_{$addr}_typed_postcode", $typed );
+					}
 					$order->$pc_setter( $row->post_code );
 				}
 			}
@@ -306,11 +314,15 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				} else {
 					$where = 'до адрес';
 				}
+				// Why, when Econt said so (kept by the last quote attempt). Without
+				// it the note used to blame Econt for "not returning a price" even
+				// when it had refused the request for a reason of our own.
+				$why = WC()->session ? trim( (string) WC()->session->get( 'drushfe_last_quote_error', '' ) ) : '';
 				$fresh->add_order_note( sprintf(
-					/* translators: 1: courier name, 2: delivery destination such as "до офис 6307" */
-					__( 'Цената за доставка не беше изчислена при поръчката: %1$s не върна цена и клиентът не е таксуван за доставка (%2$s). Проверете цената, преди да изпратите пратката.', 'drusoft-shipping-for-econt' ),
-					'Еконт',
-					$where
+					/* translators: 1: delivery destination such as "до офис 6307", 2: the courier's reply or "няма отговор" */
+					__( 'Цената за доставка не беше приложена към поръчката: клиентът не е таксуван за доставка (%1$s). Отговор на Еконт при последния опит: %2$s. Проверете цената, преди да изпратите пратката.', 'drusoft-shipping-for-econt' ),
+					$where,
+					'' !== $why ? $why : __( 'няма отговор', 'drusoft-shipping-for-econt' )
 				) );
 				$fresh->update_meta_data( '_drushfe_unpriced_noted', 1 );
 				$fresh->save();

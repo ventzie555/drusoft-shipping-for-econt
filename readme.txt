@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.0
-Stable tag: 1.0.11
+Stable tag: 1.0.12
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,15 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.12 =
+* Important fix: an order could be placed with no delivery charge at all. The live price request to Econt sent the postcode exactly as typed, so a customer who chose гр. София and typed the postcode of the village she lives in was refused a quote ("mismatch between city and postcode"), the refusal was silently dropped, and the order went through with 0.00 shipping. Econt is now always asked with the chosen city's own postcode, so a typed postcode can no longer break the quote.
+* The postcode field is locked while Econt is the chosen courier: it fills itself from the selected city, the same way the cart page already did it.
+* If Econt refuses to quote a delivery (wrong input, a cash-on-delivery amount above the legal limit, an outage), the reason is now shown under the Econt fields instead of leaving the price blank with no explanation.
+* Last line of defence: when the order is placed with no price in hand, or with a different basket than the one that was quoted, the plugin asks Econt once more before the order is created. Only if that also fails does the order go through unpriced — and the order note now records Econt's actual reply.
+* Every refused price request is written to WooCommerce → Status → Logs (source "drusoft-shipping-for-econt"), with the selection it was made for.
+* A product with no weight and an empty default weight was quoted as 0 kg, which Econt refuses; 0.5 kg is used instead.
+* The postcode the customer typed is kept on the order (hidden meta) even though the stored address is normalised to the city's postcode.
 
 = 1.0.11 =
 * Important fix for shops whose Econt store bills the courier fee to the recipient: on cash-on-delivery orders the shipping charged at checkout was also folded into the COD amount, so the customer paid the delivery twice — once inside the COD and once as Econt's own courier fee at the door (29.99 goods + 5.11 shipping became a 35.10 COD, and Econt added 5.28 on top). Who pays the courier is set in your Достави с Еконт store profile, not in the plugin, so the plugin now asks Econt at waybill time: when the recipient pays, the COD carries the goods only; when the shop pays, the COD still includes the shipping, exactly as before. Introduced in 1.0.9 — if your store bills the recipient and you ship COD, please update.
