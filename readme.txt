@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.0.13
+Stable tag: 1.0.14
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,9 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.14 =
+* Fixed: on shops that tax shipping, WooCommerce added its VAT on top of Econt's price, which already contains VAT, so the customer paid the tax twice. The plugin now hands WooCommerce the net part of Econt's amount; the customer sees exactly what Econt bills.
 
 = 1.0.13 =
 * Fixed: shops whose Econt store profile bills the courier fee to the sender were charging the customer 0.00 for delivery on every order — Econt's reply says the recipient owes the courier nothing, and the plugin read that as "free". The customer is now charged Econt's price at checkout and the waybill collects it with the order. A new setting keeps the old behaviour for shops that want to give Econt delivery away.

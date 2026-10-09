@@ -126,6 +126,20 @@ $check( 'order note names the table price and Econt\'s answer', (bool) preg_grep
 $check( 'noted once (idempotent flag)', '1' === (string) $o->get_meta( '_drushfe_unpriced_noted' ) );
 $o->delete( true );
 
+// ── shipping tax: the customer sees Econt's amount, not Econt's amount + 20 % ──
+$tax_backup = [ 'calc' => get_option( 'woocommerce_calc_taxes' ), 'class' => get_option( 'woocommerce_shipping_tax_class' ) ];
+update_option( 'woocommerce_calc_taxes', 'yes' ); update_option( 'woocommerce_shipping_tax_class', 'inherit' );
+$rate_id = WC_Tax::_insert_tax_rate( [ 'tax_rate_country' => 'BG', 'tax_rate' => '20.0000', 'tax_rate_name' => 'ДДС тест', 'tax_rate_priority' => 1, 'tax_rate_shipping' => 1, 'tax_rate_order' => 0, 'tax_rate_class' => '' ] );
+WC_Cache_Helper::invalidate_cache_group( 'taxes' ); wp_cache_flush();
+WC()->customer->set_billing_country( 'BG' ); WC()->customer->set_shipping_country( 'BG' );
+$reply = $shop_pays; drushfe_remember_selection( $sel ); $q = drushfe_quote_or_fallback( $sel ); drushfe_store_quote( $q, 0 );
+$m = new Drushfe_Shipping_Method( $INSTANCE ); $m->rates = []; $m->calculate_shipping( WC()->cart->get_shipping_packages()[0] );
+$r = reset( $m->rates ); $gross = $r ? round( (float) $r->get_cost() + (float) $r->get_shipping_tax(), 2 ) : -1;
+$check( 'taxes on: rate cost + tax = Econt\'s 5.90 (net ' . ( $r ? $r->get_cost() : '?' ) . ' + tax ' . ( $r ? $r->get_shipping_tax() : '?' ) . ')', 5.90 === $gross, 'gross=' . $gross );
+WC_Tax::_delete_tax_rate( $rate_id ); update_option( 'woocommerce_calc_taxes', $tax_backup['calc'] ); update_option( 'woocommerce_shipping_tax_class', $tax_backup['class'] ); WC_Cache_Helper::invalidate_cache_group( 'taxes' ); wp_cache_flush();
+$m = new Drushfe_Shipping_Method( $INSTANCE ); $m->rates = []; $m->calculate_shipping( WC()->cart->get_shipping_packages()[0] ); $r = reset( $m->rates );
+$check( 'taxes off: rate cost = Econt\'s 5.90 unchanged', $r && 5.90 === (float) $r->get_cost(), 'cost=' . ( $r ? $r->get_cost() : '?' ) );
+
 WC()->cart->empty_cart();
 unset( $_POST );
 update_option( $opt, $saved ); wp_cache_flush();

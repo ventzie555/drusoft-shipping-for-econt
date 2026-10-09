@@ -1140,10 +1140,26 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				$suffix .= ' (' . sprintf( _n( '%d parcel', '%d parcels', $split_count, 'drusoft-shipping-for-econt' ), $split_count ) . ')';
 			}
 
+			// Econt's amounts already contain VAT (invoice 6304033209 of
+			// 16.09.2026: 7.30 € for a shipment the API had quoted at 7.26).
+			// WooCommerce treats a rate's cost as net and adds the shop's
+			// shipping tax on top, which charged the customer VAT twice. Hand
+			// it the net part and the tax it would compute, so what the
+			// customer sees is exactly what Econt bills.
+			$taxes = '';
+			if ( $cost > 0 && wc_tax_enabled() && 'taxable' === $this->tax_status ) {
+				$tax_rates = WC_Tax::get_shipping_tax_rates();
+				if ( $tax_rates ) {
+					$taxes = WC_Tax::calc_inclusive_tax( $cost, $tax_rates );
+					$cost  = $cost - array_sum( $taxes );
+				}
+			}
+
 			$this->add_rate( [
 				'id'        => $this->get_rate_id(),
 				'label'     => $this->title . ' — ' . $suffix,
 				'cost'      => number_format( $cost, 2, '.', '' ),
+				'taxes'     => $taxes,
 				'meta_data' => [
 					'_drushfe_delivery_type' => $delivery_type,
 					'_drushfe_office_id'     => $office_id,
