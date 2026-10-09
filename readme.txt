@@ -3,7 +3,7 @@ Contributors: ventzie
 Tags: woocommerce, shipping, econt, bulgaria, delivery
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.0.12
+Stable tag: 1.0.13
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -144,6 +144,11 @@ The plugin minimizes API calls through several strategies:
 * **Session storage** — Cart selections and the most recent shipping quote are stored in the WooCommerce session, so unchanged selections do not re-quote.
 
 == Changelog ==
+
+= 1.0.13 =
+* Fixed: shops whose Econt store profile bills the courier fee to the sender were charging the customer 0.00 for delivery on every order — Econt's reply says the recipient owes the courier nothing, and the plugin read that as "free". The customer is now charged Econt's price at checkout and the waybill collects it with the order. A new setting keeps the old behaviour for shops that want to give Econt delivery away.
+* Added: fallback prices (to address, to office, to automat, per kg above 3 kg). When Econt cannot be asked for a price, the delivery is charged from this table instead of 0.00, the order carries a note with Econt's answer, and the checkout re-asks Econt when the order is placed. A cleared field means the default.
+* Improved: when Econt stops answering (timeout, refused connection), quotes pause for two minutes and the table prices the checkout meanwhile, so a dead API does not hold the checkout on every keystroke.
 
 = 1.0.12 =
 * Important fix: an order could be placed with no delivery charge at all. The live price request to Econt sent the postcode exactly as typed, so a customer who chose гр. София and typed the postcode of the village she lives in was refused a quote ("mismatch between city and postcode"), the refusal was silently dropped, and the order went through with 0.00 shipping. Econt is now always asked with the chosen city's own postcode, so a typed postcode can no longer break the quote.

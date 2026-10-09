@@ -104,11 +104,11 @@ $captured = [];
 drushfe_requote_on_submit();
 $check( 'basket changed → re-quote', 1 === count( $captured ) );
 
-// 9. Submit re-quote fails → cost stays 0, reason kept for the order note.
+// 9. Submit re-quote fails → the fallback table prices it (1.0.13: never 0.00), reason kept for the order note.
 drushfe_forget_quote();
 $reply = [ 'type' => 'ExInvalidCity', 'message' => 'Несъответствие между населено място и пощенски код.' ];
 drushfe_requote_on_submit();
-$check( 'failed submit re-quote → cost 0, reason kept', 0.0 === (float) WC()->session->get( 'drushfe_shipping_cost' ) && str_contains( (string) WC()->session->get( 'drushfe_last_quote_error' ), 'Несъответствие' ) );
+$check( 'failed submit re-quote → table price, not 0, reason kept', (float) WC()->session->get( 'drushfe_shipping_cost' ) > 0 && 'fallback' === WC()->session->get( 'drushfe_priced_by' ) && str_contains( (string) WC()->session->get( 'drushfe_fallback_reason' ), 'Несъответствие' ), 'cost=' . WC()->session->get( 'drushfe_shipping_cost' ) . ' by=' . WC()->session->get( 'drushfe_priced_by' ) );
 
 // 10. Office mode without an office → no quote attempted (validation refuses the order).
 $_POST['econt_office_id'] = ''; $captured = [];

@@ -3,7 +3,7 @@
  * Plugin Name: Drusoft Shipping for Econt
  * Plugin URI:  https://github.com/ventzie555/drusoft-shipping-for-econt
  * Description: A clean, conflict-free Econt integration for Bulgaria.
- * Version:     1.0.12
+ * Version:     1.0.13
  * Author:      DRUSOFT LTD
  * Author URI:  https://drusoft.dev/
  * Text Domain: drusoft-shipping-for-econt
@@ -55,7 +55,7 @@ if ( ! in_array( 'woocommerce/woocommerce.php', apply_filters( 'active_plugins',
  */
 define( 'DRUSHFE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DRUSHFE_URL',  plugin_dir_url( __FILE__ ) );
-define( 'DRUSHFE_VER',  '1.0.11' );
+define( 'DRUSHFE_VER',  '1.0.13' );
 
 /**
  * Load Dependencies
@@ -1746,10 +1746,11 @@ function drushfe_calculate_price_ajax(): void {
 
 	drushfe_remember_selection( $in );
 
-	$quote = drushfe_quote( $in );
+	$quote = drushfe_quote_or_fallback( $in );
 	if ( is_wp_error( $quote ) ) {
-		// The customer sees this under the Econt fields (checkout.js); the
-		// price stays unset, and the checkout re-asks Econt at submit.
+		// Only when there is nothing to fall back on (no cart). The customer
+		// sees this under the Econt fields (checkout.js); the price stays
+		// unset, and the checkout re-asks Econt at submit.
 		WC()->session->set( 'drushfe_last_quote_error', $quote->get_error_message() );
 		wp_send_json_error( $quote->get_error_message() );
 	}
@@ -1761,7 +1762,151 @@ function drushfe_calculate_price_ajax(): void {
 		'price'        => $quote['price'],
 		'currency'     => $quote['currency'],
 		'flow_version' => $flow_version,
+		'priced_by'    => $quote['priced_by'] ?? 'api',
 	] );
+}
+
+/**
+ * The checkout price, from Econt when it answers and from the fallback table
+ * when it does not. Up to 1.0.12 a failed quote left the price unset and the
+ * order could complete at 0.00; now the table prices it, the order says so,
+ * and Econt's refusal stays in the log.
+ *
+ * A transport failure (timeout, refused connection) pauses the API for two
+ * minutes so a dead Econt does not hold the checkout for 15 s per keystroke;
+ * every quote meanwhile comes from the table.
+ *
+ * @param array $in See drushfe_quote().
+ * @return array|WP_Error The quote with 'priced_by' => 'api'|'fallback'
+ *                        (and 'fallback_reason'), or WP_Error with no cart.
+ */
+function drushfe_quote_or_fallback( array $in ) {
+	if ( ! WC()->cart ) {
+		return new WP_Error( 'drushfe_no_cart', __( 'No cart session', 'drusoft-shipping-for-econt' ) );
+	}
+	$settings = drushfe_get_first_credentials() ?: [];
+	$reason   = '';
+
+	if ( drushfe_api_down( $settings ) ) {
+		$reason = __( 'Econt is not answering; quotes are paused for two minutes.', 'drusoft-shipping-for-econt' );
+	} else {
+		$quote = drushfe_quote( $in );
+		if ( ! is_wp_error( $quote ) ) {
+			$quote['priced_by']       = 'api';
+			$quote['fallback_reason'] = '';
+			return $quote;
+		}
+		$reason = $quote->get_error_message();
+		if ( 'drushfe_transport' === $quote->get_error_code() ) {
+			drushfe_mark_api_down( $settings );
+		}
+	}
+
+	$type = in_array( $in['delivery_type'] ?? '', [ 'office', 'automat' ], true ) ? $in['delivery_type'] : 'address';
+
+	return [
+		'price'           => drushfe_fallback_price( $settings, $type, drushfe_cart_weight( $settings ) ),
+		'receiver_due'    => 0.0,
+		'currency'        => get_woocommerce_currency(),
+		'split_count'     => 0,
+		'oversize_priced' => '',
+		'cart_hash'       => WC()->cart->get_cart_hash(),
+		'priced_by'       => 'fallback',
+		'fallback_reason' => $reason,
+	];
+}
+
+/**
+ * Defaults of the fallback table, shared by the settings form and the price.
+ *
+ * @return array<string, string>
+ */
+function drushfe_fallback_defaults(): array {
+	return [
+		'fallback_address' => '5.50',
+		'fallback_office'  => '3.60',
+		'fallback_automat' => '3.60',
+		'fallback_per_kg'  => '0.50',
+	];
+}
+
+/**
+ * Price from the fallback table. A field the merchant cleared means the
+ * default, not 0.00; a deliberate 0 stays 0.
+ *
+ * @param array  $settings Instance settings.
+ * @param string $type     address|office|automat.
+ * @param float  $weight   Parcel weight in kg.
+ * @return float
+ */
+function drushfe_fallback_price( array $settings, string $type, float $weight ): float {
+	$read = static function ( string $key ) use ( $settings ): float {
+		$value = (string) ( $settings[ $key ] ?? '' );
+		if ( '' === trim( $value ) ) {
+			$value = drushfe_fallback_defaults()[ $key ] ?? '0';
+		}
+		return (float) str_replace( ',', '.', $value );
+	};
+	$base = $read( 'fallback_' . $type );
+	if ( $weight > 3 ) {
+		$base += ceil( $weight - 3 ) * $read( 'fallback_per_kg' );
+	}
+	return round( $base, 2 );
+}
+
+/**
+ * Weight of the current cart for the fallback table: the fixed weight when
+ * the merchant set one, else the products' weights, else 1 kg.
+ *
+ * @param array $settings Instance settings.
+ * @return float
+ */
+function drushfe_cart_weight( array $settings ): float {
+	$fixed = (string) ( $settings['teglo'] ?? '' );
+	if ( '' !== $fixed && (float) $fixed > 0 ) {
+		return (float) $fixed;
+	}
+	$weight = WC()->cart ? (float) WC()->cart->get_cart_contents_weight() : 0.0;
+	return $weight > 0 ? $weight : 1.0;
+}
+
+/**
+ * Whether quoting is paused because Econt stopped answering.
+ *
+ * @param array $settings Instance settings (the environment is part of the key).
+ * @return bool
+ */
+function drushfe_api_down( array $settings ): bool {
+	return (bool) get_transient( drushfe_api_down_key( $settings ) );
+}
+
+/**
+ * Pause quoting for two minutes after a transport failure; the first quote
+ * after the pause asks Econt again.
+ *
+ * @param array $settings Instance settings.
+ */
+function drushfe_mark_api_down( array $settings ): void {
+	$key = drushfe_api_down_key( $settings );
+	if ( get_transient( $key ) ) {
+		return;
+	}
+	set_transient( $key, time(), 2 * MINUTE_IN_SECONDS );
+	if ( function_exists( 'wc_get_logger' ) ) {
+		wc_get_logger()->warning(
+			'Econt is not answering; the fallback table prices every delivery for the next 2 minutes, then Econt is asked again.',
+			[ 'source' => 'drusoft-shipping-for-econt' ]
+		);
+	}
+}
+
+/**
+ * @param array $settings Instance settings.
+ * @return string
+ */
+function drushfe_api_down_key( array $settings ): string {
+	$demo = ! empty( $settings['econt_test_mode'] ) && 'yes' === $settings['econt_test_mode'];
+	return 'drushfe_api_down_' . ( $demo ? 'demo' : 'live' );
 }
 
 /**
@@ -2059,8 +2204,26 @@ function drushfe_quote( array $in ) {
 			return new WP_Error( 'drushfe_no_price', __( 'No price returned by Econt', 'drusoft-shipping-for-econt' ) );
 		}
 
-		$price        += (float) $body['receiverDueAmount'];
-		$receiver_due += (float) $body['receiverDueAmount'];
+		// Who pays the courier is set in the merchant's Достави с Еконт store
+		// profile, and getPrice tells which way it went:
+		//   receiverDueAmount > 0 — the courier collects that much from the
+		//     customer at the door; the checkout shows it and the COD must not
+		//     carry it (1.0.11).
+		//   receiverDueAmount = 0 — Econt bills the shop (senderDueAmount), so
+		//     the shop charges the customer Econt's price at checkout and the
+		//     waybill folds it into the COD. Up to 1.0.12 this case charged
+		//     0.00: "the courier collects nothing" was read as "delivery is free".
+		$receiver = (float) $body['receiverDueAmount'];
+		$total    = (float) ( $body['totalPrice'] ?? 0 );
+		if ( $receiver > 0.009 ) {
+			$charge = $receiver;
+		} elseif ( 'yes' === ( $settings['shop_pays_free'] ?? 'no' ) ) {
+			$charge = 0.0; // the merchant chose to offer Econt delivery free of charge
+		} else {
+			$charge = $total;
+		}
+		$price        += $charge;
+		$receiver_due += $receiver;
 
 		// Oversize parcels (any side ≥ 100 cm) are priced by size, which the
 		// Достави с Еконт quote cannot see. Opt-in ("oversize_quote"); adds
@@ -2086,6 +2249,7 @@ function drushfe_quote( array $in ) {
 					'customer'      => $g_payload['customerInfo'],
 					'delivery_type' => $delivery_type,
 					'description'   => $g_payload['shipmentDescription'],
+					'customer_base' => $charge,
 				]
 			);
 			$price += $oversize['amount'];
@@ -2150,6 +2314,9 @@ function drushfe_store_quote( array $quote, int $flow_version = 0 ): bool {
 	$session->set( 'drushfe_oversize_priced', $quote['oversize_priced'] );
 	// The basket this price belongs to; a different basket at submit re-quotes.
 	$session->set( 'drushfe_quoted_cart_hash', $quote['cart_hash'] );
+	// 'api' or 'fallback' — a fallback price is re-asked at submit and noted on the order.
+	$session->set( 'drushfe_priced_by', $quote['priced_by'] ?? 'api' );
+	$session->set( 'drushfe_fallback_reason', (string) ( $quote['fallback_reason'] ?? '' ) );
 
 	if ( WC()->cart ) {
 		foreach ( WC()->cart->get_shipping_packages() as $key => $package ) {
@@ -2176,6 +2343,8 @@ function drushfe_forget_quote(): void {
 	$session->set( 'drushfe_split_count', 0 );
 	$session->set( 'drushfe_oversize_priced', '' );
 	$session->set( 'drushfe_quoted_cart_hash', '' );
+	$session->set( 'drushfe_priced_by', '' );
+	$session->set( 'drushfe_fallback_reason', '' );
 }
 
 /**
@@ -2243,14 +2412,17 @@ function drushfe_requote_on_submit(): void {
 		return; // drushfe_validate_checkout refuses this order anyway.
 	}
 
-	$cost     = (float) $session->get( 'drushfe_shipping_cost', 0 );
+	$cost      = (float) $session->get( 'drushfe_shipping_cost', 0 );
 	$same_cart = (string) $session->get( 'drushfe_quoted_cart_hash', '' ) === WC()->cart->get_cart_hash();
-	if ( $cost > 0 && $same_cart ) {
+	$fallback  = 'fallback' === (string) $session->get( 'drushfe_priced_by', '' );
+	if ( $cost > 0 && $same_cart && ! $fallback ) {
 		return;
 	}
 
+	// A table price from the live quote is re-asked here: if Econt is back,
+	// the order is charged its real price.
 	drushfe_remember_selection( $in );
-	$quote = drushfe_quote( $in );
+	$quote = drushfe_quote_or_fallback( $in );
 	if ( is_wp_error( $quote ) ) {
 		$session->set( 'drushfe_last_quote_error', $quote->get_error_message() );
 		drushfe_forget_quote();

@@ -906,3 +906,51 @@ msgstr "Куриерът не отговори. Моля, опитайте от�
 
 msgid "няма отговор"
 msgstr "няма отговор"
+
+#: class-drushfe-shipping-method.php
+msgid "Free delivery when you pay the courier"
+msgstr "Безплатна доставка, когато вие плащате куриера"
+
+#: class-drushfe-shipping-method.php
+msgid "Do not charge the customer when your Econt store profile bills the courier fee to you (the sender)."
+msgstr "Не таксувайте клиента, когато профилът на магазина ви в Еконт начислява куриерската услуга на вас (подателя)."
+
+#: class-drushfe-shipping-method.php
+msgid "By default the customer pays Econt's price at checkout and the waybill collects it with the order. When your store profile bills the courier fee to the recipient instead, Econt collects it at the door and this setting does nothing."
+msgstr "По подразбиране клиентът плаща цената на Еконт при поръчката и товарителницата я събира заедно с поръчката. Ако профилът на магазина ви начислява куриерската услуга на получателя, Еконт я събира при доставката и тази настройка не прави нищо."
+
+#: class-drushfe-shipping-method.php
+msgid "Fallback prices"
+msgstr "Резервни цени"
+
+#: class-drushfe-shipping-method.php
+msgid "Charged when Econt cannot be asked for a price (outage, refused quote). The order then carries a note saying so. A cleared field means the default."
+msgstr "Прилагат се, когато Еконт не може да даде цена (прекъсване, отказана калкулация). Поръчката получава бележка за това. Празно поле означава стойността по подразбиране."
+
+#: class-drushfe-shipping-method.php
+msgid "To address"
+msgstr "До адрес"
+
+#: class-drushfe-shipping-method.php
+msgid "To office"
+msgstr "До офис"
+
+#: class-drushfe-shipping-method.php
+msgid "To automat"
+msgstr "До автомат"
+
+#: class-drushfe-shipping-method.php
+msgid "Per kg above 3 kg"
+msgstr "На кг над 3 кг"
+
+#: class-drushfe-shipping-method.php
+msgid "Added for every started kilogram above 3 kg."
+msgstr "Добавя се за всеки започнат килограм над 3 кг."
+
+#: class-drushfe-shipping-method.php
+msgid "Econt did not quote this order; the delivery was charged from the fallback table: %1$s. Econt's last answer: %2$s"
+msgstr "Еконт не даде цена за тази поръчка; доставката е таксувана по резервната таблица: %1$s. Последен отговор на Еконт: %2$s"
+
+#: drusoft-shipping-for-econt.php
+msgid "Econt is not answering; quotes are paused for two minutes."
+msgstr "Еконт не отговаря; калкулациите са спрени за две минути."

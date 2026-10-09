@@ -223,9 +223,13 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 				}
 				$total    = (float) ( $quote['totalPrice'] ?? 0 );
 				$receiver = (float) ( $quote['receiverDueAmount'] ?? 0 );
-				if ( $total <= 0 || $receiver <= 0 ) {
-					// Merchant pays, or Econt gave no usable split: the customer's
-					// price cannot be scaled from nothing, so leave it alone.
+				// What the customer is charged at checkout: the recipient's share
+				// when Econt collects at the door, Econt's total when the shop
+				// pays and passes it on (1.0.13), 0 when the shop gives it away.
+				$base = isset( $ctx['customer_base'] ) ? (float) $ctx['customer_base'] : $receiver;
+				if ( $total <= 0 || $base <= 0 ) {
+					// Free for the customer, or Econt gave no usable split: there
+					// is no customer price to scale, so leave it alone.
 					return $unpriced;
 				}
 				// Same API, same parcel, without and with its size: the ratio is
@@ -241,7 +245,7 @@ if ( ! class_exists( 'Drushfe_Dimensions' ) ) {
 				if ( $sized <= $unsized ) {
 					return [ 'amount' => 0.0, 'priced' => true ];
 				}
-				return [ 'amount' => round( $receiver * ( $sized / $unsized - 1 ), 2 ), 'priced' => true ];
+				return [ 'amount' => round( $base * ( $sized / $unsized - 1 ), 2 ), 'priced' => true ];
 			} catch ( \Throwable $e ) {
 				return $unpriced;
 			}

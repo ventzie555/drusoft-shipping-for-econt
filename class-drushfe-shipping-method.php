@@ -115,6 +115,13 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 				$order->update_meta_data( '_drushfe_receiver_due', round( (float) $receiver_due, 2 ) );
 			}
 
+			// Whether the table priced this order because Econt could not, and why.
+			$priced_by = WC()->session ? (string) WC()->session->get( 'drushfe_priced_by', '' ) : '';
+			if ( 'fallback' === $priced_by ) {
+				$order->update_meta_data( '_drushfe_priced_by', 'fallback' );
+				$order->update_meta_data( '_drushfe_fallback_reason', (string) WC()->session->get( 'drushfe_fallback_reason', '' ) );
+			}
+
 			// Record the resolved pickup profile: the admin order screen can
 			// override it before the waybill is generated.
 			// This hook fires on EVERY instantiation of the method (including
@@ -301,6 +308,21 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 			foreach ( $fresh->get_shipping_methods() as $item ) {
 				if ( 'drushfe_econt' !== $item->get_method_id() ) {
 					continue;
+				}
+				// Priced by the fallback table (1.0.13): the customer was charged,
+				// the merchant should still know Econt did not quote this order.
+				if ( 'fallback' === (string) $fresh->get_meta( '_drushfe_priced_by' ) ) {
+					$fresh->add_order_note(
+						sprintf(
+							/* translators: 1: amount charged, 2: Econt's answer or the pause message. */
+							__( 'Econt did not quote this order; the delivery was charged from the fallback table: %1$s. Econt\'s last answer: %2$s', 'drusoft-shipping-for-econt' ),
+							wc_price( (float) $item->get_total() ),
+							(string) $fresh->get_meta( '_drushfe_fallback_reason' ) ?: '—'
+						)
+					);
+					$fresh->update_meta_data( '_drushfe_unpriced_noted', 1 );
+					$fresh->save();
+					return;
 				}
 				if ( empty( $item->get_meta( 'missing_address' ) ) ) {
 					return;
@@ -745,6 +767,43 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 						'test'   => __( 'Inspection and test', 'drusoft-shipping-for-econt' ),
 					],
 				],
+				'shop_pays_free' => [
+					'title'       => __( 'Free delivery when you pay the courier', 'drusoft-shipping-for-econt' ),
+					'type'        => 'checkbox',
+					'label'       => __( 'Do not charge the customer when your Econt store profile bills the courier fee to you (the sender).', 'drusoft-shipping-for-econt' ),
+					'default'     => 'no',
+					'description' => __( 'By default the customer pays Econt\'s price at checkout and the waybill collects it with the order. When your store profile bills the courier fee to the recipient instead, Econt collects it at the door and this setting does nothing.', 'drusoft-shipping-for-econt' ),
+				],
+				'section_fallback' => [
+					'title'       => __( 'Fallback prices', 'drusoft-shipping-for-econt' ),
+					'type'        => 'title',
+					'description' => __( 'Charged when Econt cannot be asked for a price (outage, refused quote). The order then carries a note saying so. A cleared field means the default.', 'drusoft-shipping-for-econt' ),
+				],
+				'fallback_address' => [
+					'title'   => __( 'To address', 'drusoft-shipping-for-econt' ),
+					'type'    => 'number',
+					'default' => '5.50',
+					'custom_attributes' => [ 'step' => '0.01', 'min' => '0' ],
+				],
+				'fallback_office' => [
+					'title'   => __( 'To office', 'drusoft-shipping-for-econt' ),
+					'type'    => 'number',
+					'default' => '3.60',
+					'custom_attributes' => [ 'step' => '0.01', 'min' => '0' ],
+				],
+				'fallback_automat' => [
+					'title'   => __( 'To automat', 'drusoft-shipping-for-econt' ),
+					'type'    => 'number',
+					'default' => '3.60',
+					'custom_attributes' => [ 'step' => '0.01', 'min' => '0' ],
+				],
+				'fallback_per_kg' => [
+					'title'       => __( 'Per kg above 3 kg', 'drusoft-shipping-for-econt' ),
+					'type'        => 'number',
+					'default'     => '0.50',
+					'custom_attributes' => [ 'step' => '0.01', 'min' => '0' ],
+					'description' => __( 'Added for every started kilogram above 3 kg.', 'drusoft-shipping-for-econt' ),
+				],
 
 				// --- SECTION: WORKFLOW & OPTIONS ---
 				'section_options' => [
@@ -1091,6 +1150,8 @@ if ( ! class_exists( 'Drushfe_Shipping_Method' ) ) {
 					// missing_address flag tells JS the user hasn't completed
 					// a selection yet (price will be 0 until they do).
 					'missing_address'        => $cost <= 0 ? true : false,
+					// 'api' or 'fallback' (the table priced it because Econt did not).
+					'priced_by'              => $session && $cost > 0 ? (string) $session->get( 'drushfe_priced_by', 'api' ) : '',
 				],
 			] );
 		}
